@@ -13,7 +13,7 @@ Query Class --- :class:`Query`
 
     The Query object created by calling :meth:`aerospike.Client.query` is used \
     for executing queries over a secondary index of a specified set (which \
-    can be omitted or ``None``). For queries, the ``None`` set contains those \
+    can be omitted or :py:obj:`None`). For queries, the :py:obj:`None` set contains those \
     records which are not part of any named set.
 
     The Query can (optionally) be assigned one of the \
@@ -92,7 +92,7 @@ Query Class --- :class:`Query`
         :param callable callback: the function to invoke for each record.
         :param dict policy: optional :ref:`aerospike_query_policies`.
 
-        .. seealso:: The :ref:`aerospike_record_tuple`.
+        .. note:: A :ref:`aerospike_record_tuple` is passed as the argument to the callback function.
 
         .. code-block:: python
 
@@ -119,31 +119,31 @@ Query Class --- :class:`Query`
 
         .. note:: To stop the stream return ``False`` from the callback function.
 
-        .. code-block:: python
+            .. code-block:: python
 
-            from __future__ import print_function
-            import aerospike
-            from aerospike import predicates as p
+                from __future__ import print_function
+                import aerospike
+                from aerospike import predicates as p
 
-            config = { 'hosts': [ ('127.0.0.1',3000)]}
-            client = aerospike.client(config).connect()
+                config = { 'hosts': [ ('127.0.0.1',3000)]}
+                client = aerospike.client(config).connect()
 
-            def limit(lim, result):
-                c = [0]
-                def key_add((key, metadata, bins)):
-                    if c[0] < lim:
-                        result.append(key)
-                        c[0] = c[0] + 1
-                    else:
-                        return False
-                return key_add
+                def limit(lim, result):
+                    c = [0] # integers are immutable so a list (mutable) is used for the counter
+                    def key_add((key, metadata, bins)):
+                        if c[0] < lim:
+                            result.append(key)
+                            c[0] = c[0] + 1
+                        else:
+                            return False
+                    return key_add
 
-            query = client.query('test','user')
-            query.where(p.between('age', 20, 30))
-            keys = []
-            query.foreach(limit(100, keys))
-            print(len(keys)) # this will be 100 if there number of matching records > 100
-            client.close()
+                query = client.query('test','user')
+                query.where(p.between('age', 20, 30))
+                keys = []
+                query.foreach(limit(100, keys))
+                print(len(keys)) # this will be 100 if the number of matching records > 100
+                client.close()
 
     .. method:: apply(module, function[, arguments])
 
@@ -155,7 +155,7 @@ Query Class --- :class:`Query`
         :param str module: the name of the Lua module.
         :param str function: the name of the Lua function within the *module*.
         :param list arguments: optional arguments to pass to the *function*.
-        :return: one of the supported types, :class:`int`, :class:`str`, :class:`list`, :class:`dict` (map), :class:`bytearray` (bytes).
+        :return: one of the supported types, :class:`int`, :class:`str`, :class:`float` (double), :class:`list`, :class:`dict` (map), :class:`bytearray` (bytes).
 
         .. seealso:: `Developing Stream UDFs <http://www.aerospike.com/docs/udf/developing_stream_udfs.html>`_
 
@@ -215,7 +215,7 @@ Query Class --- :class:`Query`
 
                 config = {'hosts': [('127.0.0.1', 3000)],
                           'lua': {'system_path':'/usr/local/aerospike/lua/',
-                                  'user_path':'/usr/local/aerospike/user-lua/'}}
+                                  'user_path':'/usr/local/aerospike/usr-lua/'}}
                 client = aerospike.client(config).connect()
 
                 pp = pprint.PrettyPrinter(indent=2)
@@ -234,6 +234,8 @@ Query Class --- :class:`Query`
             containing the stream UDF. The ``system_path`` is constructed when
             the Python package is installed, and contains system modules such
             as ``aerospike.lua``, ``as.lua``, and ``stream_ops.lua``.
+            The default value for the Lua ``system_path`` is
+            ``/usr/local/aerospike/lua``.
 
 
 .. _aerospike_query_policies:

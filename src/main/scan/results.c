@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,14 +31,20 @@
 #undef TRACE
 #define TRACE()
 
+typedef struct {
+	PyObject * py_results;
+	AerospikeClient * client;
+} LocalData;
+
 static bool each_result(const as_val * val, void * udata)
 {
-	if ( !val ) {
+	if (!val) {
 		return false;
 	}
 
 	PyObject * py_results = NULL;
-	py_results = (PyObject *) udata;
+	LocalData *data = (LocalData *) udata;
+	py_results = data->py_results;
 	PyObject * py_result = NULL;
 
 	as_error err;
@@ -46,9 +52,9 @@ static bool each_result(const as_val * val, void * udata)
 	PyGILState_STATE gstate;
 	gstate = PyGILState_Ensure();
 
-	val_to_pyobject(&err, val, &py_result);
+	val_to_pyobject(data->client, &err, val, &py_result);
 
-	if ( py_result ) {
+	if (py_result) {
 		PyList_Append(py_results, py_result);
 		Py_DECREF(py_result);
 	}
@@ -65,9 +71,11 @@ PyObject * AerospikeScan_Results(AerospikeScan * self, PyObject * args, PyObject
 	as_policy_scan scan_policy;
 	as_policy_scan * scan_policy_p = NULL;
 
+	LocalData data;
+	data.client = self->client;
 	static char * kwlist[] = {"policy", NULL};
 
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "|O:results", kwlist, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "|O:results", kwlist, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -86,23 +94,24 @@ PyObject * AerospikeScan_Results(AerospikeScan * self, PyObject * args, PyObject
 	// Convert python policy object to as_policy_scan
 	pyobject_to_policy_scan(&err, py_policy, &scan_policy, &scan_policy_p,
 			&self->client->as->config.policies.scan);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	}
 
 	py_results = PyList_New(0);
+	data.py_results = py_results;
 
 	PyThreadState * _save = PyEval_SaveThread();
 
-	aerospike_scan_foreach(self->client->as, &err, scan_policy_p, &self->scan, each_result, py_results);
+	aerospike_scan_foreach(self->client->as, &err, scan_policy_p, &self->scan, each_result, &data);
 
 	PyEval_RestoreThread(_save);
 
 
 CLEANUP:
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);

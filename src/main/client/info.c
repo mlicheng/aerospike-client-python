@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <stdbool.h>
 
 #include <aerospike/aerospike_info.h>
+#include <aerospike/aerospike_key.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_node.h>
@@ -65,22 +66,25 @@ typedef struct foreach_callback_info_udata_t {
  * Returns true if callback is successful, Otherwise false.
  *******************************************************************************************************
  */
+
 static bool AerospikeClient_Info_each(as_error * err, const as_node * node, const char * req, char * res, void * udata)
 {
 	PyObject * py_err = NULL;
 	PyObject * py_ustr = NULL;
 	PyObject * py_out = NULL;
 	foreach_callback_info_udata* udata_ptr = (foreach_callback_info_udata *) udata;
-	struct sockaddr_in* addr = NULL;
+	as_address* addr = NULL;
 
+	// Need to make sure we have the GIL since we're back in python land now
+	PyGILState_STATE gil_state = PyGILState_Ensure();
 
-	if ( err && err->code != AEROSPIKE_OK ) {
+	if (err && err->code != AEROSPIKE_OK) {
 		as_error_update(err, err->code, NULL);
-        goto CLEANUP;
+		goto CLEANUP;
 	}
-	else if ( res != NULL ) {
+	else if (res) {
 		char * out = strchr(res,'\t');
-		if ( out != NULL ) {
+		if (out) {
 			out++;
 			py_out = PyString_FromString(out);
 		}
@@ -89,12 +93,12 @@ static bool AerospikeClient_Info_each(as_error * err, const as_node * node, cons
 		}
 	}
 
-	if ( py_err == NULL ) {
+	if (!py_err) {
 		Py_INCREF(Py_None);
 		py_err = Py_None;
 	}
 
-	if ( py_out == NULL ) {
+	if (!py_out) {
 		Py_INCREF(Py_None);
 		py_out = Py_None;
 	}
@@ -103,48 +107,53 @@ static bool AerospikeClient_Info_each(as_error * err, const as_node * node, cons
 	PyTuple_SetItem(py_res, 0, py_err);
 	PyTuple_SetItem(py_res, 1, py_out);
 
-	if(udata_ptr->host_lookup_p) {
+	if (udata_ptr->host_lookup_p) {
 		PyObject * py_hosts = (PyObject *)udata_ptr->host_lookup_p;
-			if ( py_hosts && PyList_Check(py_hosts) ) {
+			if (py_hosts && PyList_Check(py_hosts)) {
 				addr = as_node_get_address((as_node *)node);
 				int size = (int) PyList_Size(py_hosts);
-				for ( int i = 0; i < size && i < AS_CONFIG_HOSTS_SIZE; i++ ) {
+				for (int i = 0; i < size; i++) {
 					char * host_addr = NULL;
 					int port = -1;
 					PyObject * py_host = PyList_GetItem(py_hosts, i);
-					if ( PyTuple_Check(py_host) && PyTuple_Size(py_host) == 2 ) {
+					if (PyTuple_Check(py_host) && PyTuple_Size(py_host) == 2) {
 						PyObject * py_addr = PyTuple_GetItem(py_host,0);
 						PyObject * py_port = PyTuple_GetItem(py_host,1);
 						if (PyUnicode_Check(py_addr)) {
 							py_ustr = PyUnicode_AsUTF8String(py_addr);
-							host_addr = PyString_AsString(py_ustr);
-						} else if ( PyString_Check(py_addr) ) {
+							host_addr = PyBytes_AsString(py_ustr);
+						} else if (PyString_Check(py_addr)) {
 							host_addr = PyString_AsString(py_addr);
 						} else {
 							as_error_update(&udata_ptr->error, AEROSPIKE_ERR_PARAM, "Host address is of type incorrect");
 							if (py_res) {
 								Py_DECREF(py_res);
 							}
+							PyGILState_Release(gil_state);
 							return false;
 						}
-						if ( PyInt_Check(py_port) ) {
+						if (PyInt_Check(py_port)) {
 							port = (uint16_t) PyInt_AsLong(py_port);
 						}
-						else if ( PyLong_Check(py_port) ) {
+						else if (PyLong_Check(py_port)) {
 							port = (uint16_t) PyLong_AsLong(py_port);
 						} else {
 							break;
 						}
 						char ip_port[IP_PORT_MAX_LEN];
-						inet_ntop(addr->sin_family, &(addr->sin_addr), ip_port, INET_ADDRSTRLEN);
-						if( (!strcmp(host_addr,ip_port)) && (port
-												== ntohs(addr->sin_port))) {
+						sprintf(ip_port, "%s:%d", host_addr, port);
+						if ( !strcmp(ip_port, addr->name) ) {
 							PyObject * py_nodes = (PyObject *) udata_ptr->udata_p;
 							PyDict_SetItemString(py_nodes, node->name, py_res);
-						}	
+						}
+					}
+
+					if (py_ustr) {
+						Py_DECREF(py_ustr);
+						py_ustr = NULL;
 					}
 				}
-			} else if ( !PyList_Check( py_hosts )){
+			} else if (!PyList_Check(py_hosts)) {
 				as_error_update(&udata_ptr->error, AEROSPIKE_ERR_PARAM, "Hosts should be specified in a list.");
 				goto CLEANUP;
 			}
@@ -152,24 +161,33 @@ static bool AerospikeClient_Info_each(as_error * err, const as_node * node, cons
 		PyObject * py_nodes = (PyObject *) udata_ptr->udata_p;
 		PyDict_SetItemString(py_nodes, node->name, py_res);
 	}
+
 	Py_DECREF(py_res);
+
 CLEANUP:
-	if ( udata_ptr->error.code != AEROSPIKE_OK ) {
+	if (py_ustr) {
+		Py_DECREF(py_ustr);
+	}
+	if (udata_ptr->error.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject( &udata_ptr->error, &py_err);
 		PyObject *exception_type = raise_exception(&udata_ptr->error);
 		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
+		PyGILState_Release(gil_state);
 		return NULL;
 	}
-	if ( err->code != AEROSPIKE_OK ) {
+	if (err->code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(err, &py_err);
 		PyObject *exception_type = raise_exception(err);
 		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
+		PyGILState_Release(gil_state);
 		return NULL;
 	}
+
+	PyGILState_Release(gil_state);
 	return true;
 }
 
@@ -197,7 +215,7 @@ PyObject * AerospikeClient_Info(AerospikeClient * self, PyObject * args, PyObjec
 
 	static char * kwlist[] = {"command", "hosts", "policy", NULL};
 
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|OO:info", kwlist, &py_req, &py_hosts, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|OO:info", kwlist, &py_req, &py_hosts, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -223,22 +241,25 @@ PyObject * AerospikeClient_Info(AerospikeClient * self, PyObject * args, PyObjec
 	// Convert python policy object to as_policy_info
 	pyobject_to_policy_info(&err, py_policy, &info_policy, &info_policy_p,
 					&self->as->config.policies.info);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 	char * req = NULL;
-	if ( PyUnicode_Check(py_req)) {
+	if (PyUnicode_Check(py_req)) {
 		py_ustr = PyUnicode_AsUTF8String(py_req);
-		req = PyString_AsString(py_ustr);
-	} else if( PyString_Check(py_req) ) {
+		req = strdup(PyBytes_AsString(py_ustr));
+	} else if (PyString_Check(py_req)) {
 		req = PyString_AsString(py_req);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Request must be a string");
 		goto CLEANUP;
 	}
+
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_info_foreach(self->as, &err, info_policy_p, req,
 					(aerospike_info_foreach_callback)AerospikeClient_Info_each,
 					&info_callback_udata);
+	Py_END_ALLOW_THREADS
 
 	if (&info_callback_udata.error.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
@@ -248,7 +269,7 @@ CLEANUP:
 	if (py_ustr) {
 		Py_DECREF(py_ustr);
 	}
-	if ( info_callback_udata.error.code != AEROSPIKE_OK ) {
+	if (info_callback_udata.error.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&info_callback_udata.error, &py_err);
 		PyObject *exception_type = raise_exception(&info_callback_udata.error);
@@ -259,7 +280,7 @@ CLEANUP:
 		}
 		return NULL;
 	}
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -273,3 +294,42 @@ CLEANUP:
 
 	return info_callback_udata.udata_p;
 }
+
+
+PyObject * AerospikeClient_HasGeo(AerospikeClient * self, PyObject * args, PyObject * kwds)
+{
+	// Initialize error
+	as_error err;
+	as_error_init(&err);
+
+	if (!self || !self->as) {
+		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid aerospike object");
+		goto CLEANUP;
+	}
+
+	if (!self->is_conn_16) {
+		as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
+		goto CLEANUP;
+	}
+
+	if (aerospike_has_geo(self->as)) {
+		Py_INCREF(Py_True);
+		return Py_True;
+	}
+
+	Py_INCREF(Py_False);
+	return Py_False;
+
+CLEANUP:
+
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL;
+		error_to_pyobject(&err, &py_err);
+		PyObject *exception_type = raise_exception(&err);
+		PyErr_SetObject(exception_type, py_err);
+		Py_DECREF(py_err);
+		return NULL;
+	}
+	return NULL;
+}
+

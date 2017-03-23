@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 #include "client.h"
 #include "conversions.h"
 #include "exceptions.h"
-#include "key.h"
 #include "policy.h"
 
 /**
@@ -63,13 +62,15 @@ PyObject * AerospikeClient_Apply_Invoke(
 	PyObject * py_umodule   = NULL;
 	PyObject * py_ufunction = NULL;
 
+	as_static_pool static_pool;
+	memset(&static_pool, 0, sizeof(static_pool));
 	// Initialisation flags
 	bool key_initialised = false;
 
 	// Initialize error
 	as_error_init(&err);
 
-	if( !PyList_Check(py_arglist) ){
+	if (!PyList_Check(py_arglist)) {
 		PyErr_SetString(PyExc_TypeError, "expected UDF method arguments in a 'list'");
 		return NULL;
 	}
@@ -84,32 +85,33 @@ PyObject * AerospikeClient_Apply_Invoke(
 		goto CLEANUP;
 	}
 
+	self->is_client_put_serializer = false;
 	// Convert python key object to as_key
 	pyobject_to_key(&err, py_key, &key);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 	// Key is initialiased successfully
 	key_initialised = true;
 
 	// Convert python list to as_list
-	pyobject_to_list(self, &err, py_arglist, &arglist, NULL, -1);
-	if ( err.code != AEROSPIKE_OK ) {
+	pyobject_to_list(self, &err, py_arglist, &arglist, &static_pool, SERIALIZER_PYTHON);
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	if ( PyUnicode_Check(py_module) ){
+	if (PyUnicode_Check(py_module)) {
 		py_umodule = PyUnicode_AsUTF8String(py_module);
-		module = PyString_AsString(py_umodule);
+		module = PyBytes_AsString(py_umodule);
 	}
-	else if ( PyString_Check(py_module) ) {
+	else if (PyString_Check(py_module)) {
 		module = PyString_AsString(py_module);
 	}
 	else {
@@ -117,11 +119,11 @@ PyObject * AerospikeClient_Apply_Invoke(
 		goto CLEANUP;
 	}
 
-	if ( PyUnicode_Check(py_function) ){
+	if (PyUnicode_Check(py_function)) {
 		py_ufunction = PyUnicode_AsUTF8String(py_function);
-		function = PyString_AsString(py_ufunction);
+		function = PyBytes_AsString(py_ufunction);
 	}
-	else if ( PyString_Check(py_function) ) {
+	else if (PyString_Check(py_function)) {
 		function = PyString_AsString(py_function);
 	}
 	else {
@@ -130,10 +132,12 @@ PyObject * AerospikeClient_Apply_Invoke(
 	}
 
 	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_key_apply(self->as, &err, apply_policy_p, &key, module, function, arglist, &result);
+	Py_END_ALLOW_THREADS
 
-	if ( err.code == AEROSPIKE_OK ) {
-		val_to_pyobject(&err, result, &py_result);
+	if (err.code == AEROSPIKE_OK) {
+		val_to_pyobject(self, &err, result, &py_result);
 	} else {
 		as_error_update(&err, err.code, NULL);
 	}
@@ -148,14 +152,14 @@ CLEANUP:
 		Py_DECREF(py_ufunction);
 	}
 
-	if (key_initialised == true){
+	if (key_initialised == true) {
 		// Destroy the key if it is initialised successfully.
 		as_key_destroy(&key);
 	}
 	as_list_destroy(arglist);
 	as_val_destroy(result);
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -205,8 +209,8 @@ PyObject * AerospikeClient_Apply(AerospikeClient * self, PyObject * args, PyObje
 	static char * kwlist[] = {"key", "module", "function", "args", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O:apply", kwlist,
-			&py_key, &py_module, &py_function, &py_arglist, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O:apply", kwlist,
+			&py_key, &py_module, &py_function, &py_arglist, &py_policy) == false) {
 		return NULL;
 	}
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ struct exceptions {
 	PyObject *DeviceOverload;
 	PyObject *ForbiddenError;
 	PyObject *QueryError;
+	PyObject *InvalidGeoJSON;
 
 	//Client exceptions
 	PyObject *ParamError;
@@ -137,9 +138,9 @@ struct exceptions {
 };
 
 struct server_exceptions_struct {
-	PyObject * *server_exceptions[9];
-	char * server_exceptions_name[9];
-	int server_exceptions_codes[9];
+	PyObject * *server_exceptions[10];
+	char * server_exceptions_name[10];
+	int server_exceptions_codes[10];
 };
 struct record_exceptions_struct {
 	PyObject * *record_exceptions[10];

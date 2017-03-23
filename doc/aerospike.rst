@@ -27,7 +27,7 @@ Records are uniquely identified by their key, and record metadata is contained
 in an in-memory primary index.
 
 .. seealso::
-    `System Overview <http://www.aerospike.com/docs/architecture/index.html>`_
+    `Architecture Overview <http://www.aerospike.com/docs/architecture/index.html>`_
     and `Aerospike Data Model
     <http://www.aerospike.com/docs/architecture/data-model.html>`_ for more
     information about Aerospike.
@@ -45,31 +45,39 @@ in an in-memory primary index.
         .. hlist::
             :columns: 1
 
-            * **hosts** a required :class:`list` of (address, port) tuples identifying the cluster. \
+            * **hosts** a required :class:`list` of (address, port) tuples identifying a node (or multiple nodes) in the cluster. \
               The client will connect to the first available node in the list, the *seed node*, \
               and will learn about the cluster and partition map from it.
             * **lua** an optional :class:`dict` containing the paths to two types of Lua modules
-                * **system_path** the location of the system modules such as ``aerospike.lua``, ``stream_ops.lua``
+                * **system_path** the location of the system modules such as ``aerospike.lua`` (default: ``/usr/local/aerospike/lua``)
                 * **user_path** the location of the user's record and stream UDFs
             * **policies** a :class:`dict` of policies
-                * **timeout** default timeout in milliseconds
-                * **key** default key policy for this client
-                * **exists** default exists policy for this client
-                * **gen** default generation policy for this client
-                * **retry** default retry policy for this client
-                * **consistency_level** default consistency level policy for this client
-                * **replica** default replica policy for this client
-                * **commit_level** default commit level policy for this client
+                * **timeout** default connection timeout in milliseconds
+                * **key** default key policy, with values such as :data:`aerospike.POLICY_KEY_DIGEST`
+                * **exists** default exists policy, with values such as :data:`aerospike.POLICY_EXISTS_CREATE`
+                * **gen** default generation policy, with values such as :data:`aerospike.POLICY_GEN_IGNORE`
+                * **retry** default retry policy, with values such as :data:`aerospike.POLICY_RETRY_NONE`
+                * **consistency_level** default consistency level policy, with values such as :data:`aerospike.POLICY_CONSISTENCY_ONE`
+                * **replica** default replica policy, with values such as :data:`aerospike.POLICY_REPLICA_MASTER`
+                * **commit_level** default commit level policy, with values such as :data:`aerospike.POLICY_COMMIT_LEVEL_ALL`
             * **shm** a :class:`dict` with optional shared-memory cluster tending parameters. Shared-memory cluster tending is on if the :class:`dict` is provided. If multiple clients are instantiated talking to the same cluster the *shm* cluster-tending should be used.
                 * **max_nodes** maximum number of nodes allowed. Pad so new nodes can be added without configuration changes (default: 16)
                 * **max_namespaces** similarly pad (default: 8)
                 * **takeover_threshold_sec** take over tending if the cluster hasn't been checked for this many seconds (default: 30)
+                * **shm_key** explicitly set the shm key for this client. It is otherwise implicitly evaluated per unique hostname, and can be inspected with :meth:`~aerospike.Client.shm_key` (default: 0xA5000000)
+            * **serialization** an optional instance-level :py:func:`tuple` of (serializer, deserializer). Takes precedence over a class serializer registered with :func:`~aerospike.set_serializer`.
+            * **thread_pool_size** number of threads in the pool that is used in batch/scan/query commands (default: 16)
+            * **max_threads** size of the synchronous connection pool for each server node (default: 300) *DEPRECATED*
+            * **max_conns_per_node** maximum number of pipeline connections allowed for each node 
+            * **batch_direct** whether to use the batch-direct protocol (default: ``False``, so will use batch-index if available)
+            * **tend_interval** polling interval in milliseconds for tending the cluster (default: 1000)
+            * **compression_threshold** compress data for transmission if the object size is greater than a given number of bytes (default: 0, meaning 'never compress')
+            * **cluster_name** only server nodes matching this name will be used when determining the cluster
 
-    :return: an :py:class:`aerospike.Client` class.
+    :return: an instance of the :py:class:`aerospike.Client` class.
 
     .. seealso::
-        `Client Policies <http://www.aerospike.com/apidocs/c/db/d65/group__client__policies.html>`_ and \
-        `Shared Memory <https://www.aerospike.com/docs/client/c/usage/shm.html>`_.
+        `Shared Memory <https://www.aerospike.com/docs/client/c/usage/shm.html>`_ and `Per-Transaction Consistency Guarantees <http://www.aerospike.com/docs/architecture/consistency.html>`_.
 
     .. code-block:: python
 
@@ -86,66 +94,194 @@ in an in-memory primary index.
             'shm':      { }}
         client = aerospike.client(config)
 
-    .. versionchanged:: 1.0.46
+    .. versionchanged:: 2.0.0
+
+
+.. py:function:: null()
+
+    A type for distinguishing a server-side null from a Python :py:obj:`None`.
+    Replaces the constant ``aerospike.null``.
+
+    :return: a type representing the server-side type ``as_null``.
+
+    .. versionadded:: 2.0.1
+
+
+.. py:function:: calc_digest(ns, set, key) -> bytearray
+
+    Calculate the digest of a particular key. See: :ref:`aerospike_key_tuple`.
+
+    :param str ns: the namespace in the aerospike cluster.
+    :param str set: the set name.
+    :param key: the primary key identifier of the record within the set.
+    :type key: :class:`str`, :class:`int` or :class:`bytearray`
+    :return: a RIPEMD-160 digest of the input tuple.
+    :rtype: :class:`bytearray`
+
+    .. code-block:: python
+
+        import aerospike
+        import pprint
+
+        digest = aerospike.calc_digest("test", "demo", 1 )
+        pp.pprint(digest)
 
 
 .. rubric:: Serialization
 
 .. note::
 
-    By default, the :py:class:`aerospike.Client` maps supported types such \
-    as :py:class:`int`, :py:class:`str`, :py:class:`bytearray`, :py:class:`list`, \
-    :py:class:`dict` to matching aerospike server \
+    By default, the :py:class:`aerospike.Client` maps the supported types \
+    :py:class:`int`, :py:class:`str`, :py:class:`float`, :py:class:`bytearray`, \
+    :py:class:`list`, :py:class:`dict` to matching aerospike server \
     `types <http://www.aerospike.com/docs/guide/data-types.html>`_ \
-    (int, string, bytes, list, map). When an unsupported type is encountered
-    the module uses \
+    (int, string, double, bytes, list, map). When an unsupported type is \
+    encountered, the module uses \
     `cPickle <https://docs.python.org/2/library/pickle.html?highlight=cpickle#module-cPickle>`_ \
-    to serialize and deserialize the data, storing it into a *bytes* of type \
+    to serialize and deserialize the data, storing it into *as_bytes* of type \
     `'Python' <https://www.aerospike.com/docs/udf/api/bytes.html#encoding-type>`_ \
     (`AS_BYTES_PYTHON <http://www.aerospike.com/apidocs/c/d0/dd4/as__bytes_8h.html#a0cf2a6a1f39668f606b19711b3a98bf3>`_).
 
-    Two functions :func:`~aerospike.set_serializer` and :func:`~aerospike.set_deserializer` \
+    The functions :func:`~aerospike.set_serializer` and :func:`~aerospike.set_deserializer` \
     allow for user-defined functions to handle serialization, instead. \
     The serialized data is stored as \
-    'Generic' type *bytes* of type (\
-    `AS_BYTES_BLOB <http://www.aerospike.com/apidocs/c/d0/dd4/as__bytes_8h.html#a0cf2a6a1f39668f606b19711b3a98bf3>`_).
+    'Generic' *as_bytes* of type (\
+    `AS_BYTES_BLOB <http://www.aerospike.com/apidocs/c/d0/dd4/as__bytes_8h.html#a0cf2a6a1f39668f606b19711b3a98bf3>`_). \
+    The *serialization* config param of :func:`aerospike.client` registers an \
+    instance-level pair of functions that handle serialization.
 
 .. py:function:: set_serializer(callback)
 
-    Overrides the default serializer with a user-defined function *callback*.
+    Register a user-defined serializer available to all :class:`aerospike.Client`
+    instances.
 
     :param callable callback: the function to invoke for serialization.
+
+    .. seealso:: To use this function with :meth:`~aerospike.Client.put` the \
+        argument to *serializer* should be :const:`aerospike.SERIALIZER_USER`.
 
     .. code-block:: python
 
         import aerospike
-        import cPickle as pickle
+        import json
 
         def my_serializer(val):
-            return pickle.dumps(val)
+            return json.dumps(val)
 
         aerospike.set_serializer(my_serializer)
 
     .. versionadded:: 1.0.39
 
-
 .. py:function:: set_deserializer(callback)
 
-    Overrides the default serializer with a user-defined fucntion *callback*.
+    Register a user-defined deserializer available to all :class:`aerospike.Client`
+    instances. Once registered, all read methods (such as \
+    :meth:`~aerospike.Client.get`) will run bins containing 'Generic' *as_bytes* \
+    of type (`AS_BYTES_BLOB <http://www.aerospike.com/apidocs/c/d0/dd4/as__bytes_8h.html#a0cf2a6a1f39668f606b19711b3a98bf3>`_)
+    through this deserializer.
 
     :param callable callback: the function to invoke for deserialization.
 
+.. py:function:: unset_serializers()
+
+    Deregister the user-defined de/serializer available from :class:`aerospike.Client`
+    instances.
+
+    .. versionadded:: 1.0.53
+
+.. note:: Serialization Examples
+
+    The following example shows the three modes of serialization - built-in, \
+    class-level user functions, instance-level user functions:
+
     .. code-block:: python
 
+        from __future__ import print_function
         import aerospike
-        import cPickle as pickle
+        import marshal
+        import json
 
-        def my_deserializer(val):
-            return pickle.loads(val)
+        def go_marshal(val):
+            return marshal.dumps(val)
 
-        aerospike.set_deserializer(my_serializer)
+        def demarshal(val):
+            return marshal.loads(val)
 
-    .. versionadded:: 1.0.39
+        def jsonize(val):
+            return json.dumps(val)
+
+        def dejsonize(val):
+            return json.loads(val)
+
+        aerospike.set_serializer(go_marshal)
+        aerospike.set_deserializer(demarshal)
+        config = {'hosts':[('127.0.0.1', 3000)]}
+        client = aerospike.client(config).connect()
+        config['serialization'] = (jsonize,dejsonize)
+        client2 = aerospike.client(config).connect()
+
+        for i in xrange(1, 4):
+            try:
+                client.remove(('test', 'demo', 'foo' + i))
+            except:
+                pass
+
+        bin_ = {'t': (1, 2, 3)} # tuple is an unsupported type
+        print("Use the built-in serialization (cPickle)")
+        client.put(('test','demo','foo1'), bin_)
+        (key, meta, bins) = client.get(('test','demo','foo1'))
+        print(bins)
+
+        print("Use the class-level user-defined serialization (marshal)")
+        client.put(('test','demo','foo2'), bin_, serializer=aerospike.SERIALIZER_USER)
+        (key, meta, bins) = client.get(('test','demo','foo2'))
+        print(bins)
+
+        print("Use the instance-level user-defined serialization (json)")
+        client2.put(('test','demo','foo3'), bin_, serializer=aerospike.SERIALIZER_USER)
+        # notice that json-encoding a tuple produces a list
+        (key, meta, bins) = client2.get(('test','demo','foo3'))
+        print(bins)
+        client.close()
+
+    The expected output is:
+
+    .. code-block:: python
+
+        Use the built-in serialization (cPickle)
+        {'i': 321, 't': (1, 2, 3)}
+        Use the class-level user-defined serialization (marshal)
+        {'i': 321, 't': (1, 2, 3)}
+        Use the instance-level user-defined serialization (json)
+        {'i': 321, 't': [1, 2, 3]}
+
+    While AQL shows the records as having the following structure:
+
+    .. code-block:: sql
+
+        aql> select i,t from test.demo where PK='foo1'
+        +-----+----------------------------------------------+
+        | i   | t                                            |
+        +-----+----------------------------------------------+
+        | 321 | 28 49 31 0A 49 32 0A 49 33 0A 74 70 31 0A 2E |
+        +-----+----------------------------------------------+
+        1 row in set (0.000 secs)
+
+        aql> select i,t from test.demo where PK='foo2'
+        +-----+-------------------------------------------------------------+
+        | i   | t                                                           |
+        +-----+-------------------------------------------------------------+
+        | 321 | 28 03 00 00 00 69 01 00 00 00 69 02 00 00 00 69 03 00 00 00 |
+        +-----+-------------------------------------------------------------+
+        1 row in set (0.000 secs)
+
+        aql> select i,t from test.demo where PK='foo3'
+        +-----+----------------------------+
+        | i   | t                          |
+        +-----+----------------------------+
+        | 321 | 5B 31 2C 20 32 2C 20 33 5D |
+        +-----+----------------------------+
+        1 row in set (0.000 secs)
 
 
 .. rubric:: Logging
@@ -158,16 +294,19 @@ in an in-memory primary index.
 
     :param callable callback: the function used as the logging handler.
 
-    .. code-block:: python
+    .. note:: The callback function must have the five parameters (level, func, path, line, msg)
 
-        import aerospike
-        import syslog
+        .. code-block:: python
 
-        def as_logger(level, func, myfile, line):
-            syslog.syslog(line)
+            from __future__ import print_function
+            import aerospike
 
-        aerospike.set_log_level(aerospike.LOG_LEVEL_DEBUG)
-        aerospike.set_log_handler(as_logger)
+            def as_logger(level, func, path, line, msg):
+            def as_logger(level, func, myfile, line, msg):
+                print("**", myfile, line, func, ':: ', msg, "**")
+
+            aerospike.set_log_level(aerospike.LOG_LEVEL_DEBUG)
+            aerospike.set_log_handler(as_logger)
 
 
 .. py:function:: set_log_level(log_level)
@@ -177,89 +316,726 @@ in an in-memory primary index.
     :param int log_level: one of the :ref:`aerospike_log_levels` constant values.
 
 
+.. rubric:: Geospatial
+
+.. py:function:: geodata([geo_data])
+
+    Helper for creating an instance of the :class:`~aerospike.GeoJSON` class. \
+    Used to wrap a geospatial object, such as a point, polygon or circle.
+
+    :param dict geo_data: a :class:`dict` representing the geospatial data.
+    :return: an instance of the :py:class:`aerospike.GeoJSON` class.
+
+    .. code-block:: python
+
+        import aerospike
+
+        # Create GeoJSON point using WGS84 coordinates.
+        latitude = 45.920278
+        longitude = 63.342222
+        loc = aerospike.geodata({'type': 'Point',
+                                 'coordinates': [longitude, latitude]})
+
+    .. versionadded:: 1.0.54
+
+.. py:function:: geojson([geojson_str])
+
+    Helper for creating an instance of the :class:`~aerospike.GeoJSON` class \
+    from a raw GeoJSON :class:`str`.
+
+    :param dict geojson_str: a :class:`str` of raw GeoJSON.
+    :return: an instance of the :py:class:`aerospike.GeoJSON` class.
+
+    .. code-block:: python
+
+        import aerospike
+
+        # Create GeoJSON point using WGS84 coordinates.
+        loc = aerospike.geojson('{"type": "Point", "coordinates": [-80.604333, 28.608389]}')
+
+    .. versionadded:: 1.0.54
+
 .. _aerospike_operators:
 
 Operators
 ---------
 
-.. data:: OPERATOR_APPEND
-
-    The append-to-bin operator for the multi-ops method :py:meth:`~aerospike.Client.operate`
-
-.. data:: OPERATOR_INCR
-
-    The increment-bin operator for the multi-ops method :py:meth:`~aerospike.Client.operate`
-
-.. data:: OPERATOR_PREPEND
-
-    The prepend-to-bin operator for the multi-ops method :py:meth:`~aerospike.Client.operate`
-
-.. data:: OPERATOR_READ
-
-    The read-bin operator for the multi-ops method :py:meth:`~aerospike.Client.operate`
-
-.. data:: OPERATOR_TOUCH
-
-    The touch-record operator for the multi-ops method :py:meth:`~aerospike.Client.operate`
+Operators for the multi-ops method :py:meth:`~aerospike.Client.operate`.
 
 .. data:: OPERATOR_WRITE
 
-    The write-bin operator for the multi-ops method :py:meth:`~aerospike.Client.operate`
+    Write a value into a bin
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OPERATOR_WRITE,
+            "bin": "name",
+            "val": "Peanut"
+        }
+
+.. data:: OPERATOR_APPEND
+
+    Append to a bin with :class:`str` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OPERATOR_APPEND,
+            "bin": "name",
+            "val": "Mr. "
+        }
+
+.. data:: OPERATOR_PREPEND
+
+    Prepend to a bin with :class:`str` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OPERATOR_PREPEND,
+            "bin": "name",
+            "val": " Esq."
+        }
+
+.. data:: OPERATOR_INCR
+
+    Increment a bin with :class:`int` or :class:`float` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OPERATOR_INCR,
+            "bin": "age",
+            "val": 1
+        }
+
+.. data:: OPERATOR_READ
+
+    Read a specific bin
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OPERATOR_READ,
+            "bin": "name"
+        }
+
+.. data:: OPERATOR_TOUCH
+
+    Touch a record, setting its TTL. May be combined with :const:`~aerospike.OPERATOR_READ`
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OPERATOR_TOUCH
+        }
+
+.. data:: OP_LIST_APPEND
+
+    Append an element to a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_APPEND,
+            "bin": "events",
+            "val": 1234
+        }
+
+.. data:: OP_LIST_APPEND_ITEMS
+
+    Extend a bin with :class:`list` type data with a list of items
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_APPEND_ITEMS,
+            "bin": "events",
+            "val": [ 123, 456 ]
+        }
+
+.. data:: OP_LIST_INSERT
+
+    Insert an element at a specified index of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_INSERT,
+            "bin": "events",
+            "index": 2,
+            "val": 1234
+        }
+
+.. data:: OP_LIST_INSERT_ITEMS
+
+    Insert the items at a specified index of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_INSERT_ITEMS,
+            "bin": "events",
+            "index": 2,
+            "val": [ 123, 456 ]
+        }
+
+.. data:: OP_LIST_POP
+
+    Remove and return the element at a specified index of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_POP, # removes and returns a value
+            "bin": "events",
+            "index": 2
+        }
+
+.. data:: OP_LIST_POP_RANGE
+
+    Remove and return a list of elements at a specified index range of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_POP_RANGE,
+            "bin": "events",
+            "index": 2,
+            "val": 3 # remove and return 3 elements starting at index 2
+        }
+
+.. data:: OP_LIST_REMOVE
+
+    Remove the element at a specified index of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_REMOVE, # remove a value
+            "bin": "events",
+            "index": 2
+        }
+
+.. data:: OP_LIST_REMOVE_RANGE
+
+    Remove a list of elements at a specified index range of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_REMOVE_RANGE,
+            "bin": "events",
+            "index": 2,
+            "val": 3 # remove 3 elements starting at index 2
+        }
+
+.. data:: OP_LIST_CLEAR
+
+    Remove all the elements in a bin with :class:`list` type data
+
+    .. code-block:: python
+
+         {
+            "op" : aerospike.OP_LIST_CLEAR,
+            "bin": "events"
+        }
+
+.. data:: OP_LIST_SET
+
+    Set the element *val* in a specified index of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_SET,
+            "bin": "events",
+            "index": 2,
+            "val": "latest event at index 2" # set this value at index 2
+        }
+
+.. data:: OP_LIST_GET
+
+    Get the element at a specified index of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_GET,
+            "bin": "events",
+            "index": 2
+        }
+
+.. data:: OP_LIST_GET_RANGE
+
+    Get the list of elements starting at a specified index of a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_GET_RANGE,
+            "bin": "events",
+            "index": 2,
+            "val": 3 # get 3 elements starting at index 2
+        }
+
+.. data:: OP_LIST_TRIM
+
+    Remove elements from a bin with :class:`list` type data which are not within the range starting at a given *index* plus *val*
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_TRIM,
+            "bin": "events",
+            "index": 2,
+            "val": 3 # remove all elements not in the range between index 2 and index 2 + 3
+        }
+
+.. data:: OP_LIST_SIZE
+
+    Count the number of elements in a bin with :class:`list` type data
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_LIST_SIZE,
+            "bin": "events" # gets the size of a list contained in the bin
+        }
+
+.. data:: OP_MAP_SET_POLICY
+
+    Set the policy for a map bin. The policy controls the write mode and the ordering of the map entries.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_SET_POLICY,
+            "bin": "scores",
+            "map_policy": {"map_write_mode": Aeorspike.MAP_UPDATE, "map_order": Aerospike.MAP_KEY_VALUE_ORDERED}
+        }
+
+.. data:: OP_MAP_PUT
+
+    Put a key/value pair into a map. Operator accepts an optional map_policy dictionary (see OP_MAP_SET_POLICY for an example)
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_PUT,
+            "bin": "my_map",
+            "key": "age",
+            "val": 97
+        }
+
+.. data:: OP_MAP_PUT_ITEMS. Operator accepts an optional map_policy dictionary (see OP_MAP_SET_POLICY for an example)
+
+    Put a dictionary of key/value pairs into a map.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_PUT_ITEMS,
+            "bin": "my_map",
+            "val": {"name": "bubba", "occupation": "dancer"}
+        }
+
+.. data:: OP_MAP_INCREMENT. Operator accepts an optional map_policy dictionary (see OP_MAP_SET_POLICY for an example)
+
+    Increment the value of map entry by the given "val" argument.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_INCREMENT,
+            "bin": "my_map",
+            "key": "age",
+            "val": 1
+        }
+
+.. data:: OP_MAP_DECREMENT. Operator accepts an optional map_policy dictionary (see OP_MAP_SET_POLICY for an example)
+
+    Decrement the value of map entry by the given "val" argument.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_DECREMENT,
+            "bin": "my_map",
+            "key": "age",
+            "val": 1
+        }
+
+.. data:: OP_MAP_SIZE
+
+    Return the number of entries in the given map bin.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_SIZE,
+            "bin": "my_map"
+        }
+
+.. data:: OP_MAP_CLEAR
+
+    Remove all entries from the given map bin.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_CLEAR,
+            "bin": "my_map"
+        }
+
+Note that if "return_type" is not specified in the parameters for a map operation, the default is aerospike.MAP_RETURN_NONE
+
+.. data:: OP_MAP_REMOVE_BY_KEY
+
+    Remove the first entry from the map bin that matches the given key.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_KEY,
+            "bin": "my_map",
+            "key": "age",
+            "return_type": aerospike.MAP_RETURN_VALUE
+        }
+
+.. data:: OP_MAP_REMOVE_BY_KEY_LIST
+
+    Remove the entries from the map bin that match the list of given keys.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_KEY_LIST,
+            "bin": "my_map",
+            "val": ["name", "rank", "serial"]
+        }
+
+.. data:: OP_MAP_REMOVE_BY_KEY_RANGE
+
+    Remove the entries from the map bin that have keys which fall between the given "key" (inclusive) and "val" (exclusive).
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_KEY_RANGE,
+            "bin": "my_map",
+            "key": "i",
+            "val": "j",
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+
+.. data:: OP_MAP_REMOVE_BY_VALUE
+
+    Remove the entry or entries from the map bin that have values which match the given "val" parameter.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_VALUE,
+            "bin": "my_map",
+            "val": 97,
+            "return_type": aerospike.MAP_RETURN_KEY
+        }
+
+.. data:: OP_MAP_REMOVE_BY_VALUE_LIST
+
+    Remove the entries from the map bin that have values which match the list of values given in the "val" parameter.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_VALUE_LIST,
+            "bin": "my_map",
+            "val": [97, 98, 99],
+            "return_type": aerospike.MAP_RETURN_KEY
+        }
+
+.. data:: OP_MAP_REMOVE_BY_VALUE_RANGE
+
+    Remove the entries from the map bin that have values starting with the given "val" parameter (inclusive) up to the given "range" parameter (exclusive).
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_VALUE_RANGE,
+            "bin": "my_map",
+            "val": 97,
+            "range": 100,
+            "return_type": aerospike.MAP_RETURN_KEY
+        }
+
+.. data:: OP_MAP_REMOVE_BY_INDEX
+
+    Remove the entry from the map bin at the given "index" location.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_INDEX,
+            "bin": "my_map",
+            "index": 0,
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+
+.. data:: OP_MAP_REMOVE_BY_INDEX_RANGE
+
+    Remove the entries from the map bin starting at the given "index" location and removing "range" items.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_INDEX_RANGE,
+            "bin": "my_map",
+            "index": 0,
+            "range": 2,
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+        
+.. data:: OP_MAP_REMOVE_BY_RANK
+
+    Remove the first entry from the map bin that has a value with a rank matching the given "index".
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_RANK,
+            "bin": "my_map",
+            "index": 10
+        }
+
+.. data:: OP_MAP_REMOVE_BY_RANK_RANGE
+
+    Remove the entries from the map bin that have values with a rank starting at the given "index" and removing "range" items.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_REMOVE_BY_RANK_RANGE,
+            "bin": "my_map",
+            "index": 10,
+            "range": 2,
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+
+.. data:: OP_MAP_GET_BY_KEY
+
+    Return the entry from the map bin that which has a key that matches the given "key" parameter.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_GET_BY_KEY,
+            "bin": "my_map",
+            "key": "age",
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+
+.. data:: OP_MAP_GET_BY_KEY_RANGE
+
+    Return the entries from the map bin that have keys which fall between the given "key" (inclusive) and "val" (exclusive).
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_GET_BY_KEY_RANGE,
+            "bin": "my_map",
+            "key": "i",
+            "val": "j",
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+
+.. data:: OP_MAP_GET_BY_VALUE
+
+    Return the entry or entries from the map bin that have values which match the given "val" parameter.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_GET_BY_VALUE,
+            "bin": "my_map",
+            "val": 97,
+            "return_type": aerospike.MAP_RETURN_KEY
+        }
+
+.. data:: OP_MAP_GET_BY_VALUE_RANGE
+
+    Return the entries from the map bin that have values starting with the given "val" parameter (inclusive) up to the given "range" parameter (exclusive).
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_GET_BY_VALUE_RANGE,
+            "bin": "my_map",
+            "val": 97,
+            "range": 100,
+            "return_type": aerospike.MAP_RETURN_KEY
+        }
+
+.. data:: OP_MAP_GET_BY_INDEX
+
+    Return the entry from the map bin at the given "index" location.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_GET_BY_INDEX,
+            "bin": "my_map",
+            "index": 0,
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+
+.. data:: OP_MAP_GET_BY_INDEX_RANGE
+
+    Return the entries from the map bin starting at the given "index" location and removing "range" items.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_GET_BY_INDEX_RANGE,
+            "bin": "my_map",
+            "index": 0,
+            "range": 2,
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+
+.. data:: OP_MAP_GET_BY_RANK
+
+    Return the first entry from the map bin that has a value with a rank matching the given "index".
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_GET_BY_RANK,
+            "bin": "my_map",
+            "index": 10
+        }
+
+.. data:: OP_MAP_GET_BY_RANK_RANGE
+
+    Return the entries from the map bin that have values with a rank starting at the given "index" and removing "range" items.
+
+    .. code-block:: python
+
+        {
+            "op" : aerospike.OP_MAP_GET_BY_RANK_RANGE,
+            "bin": "my_map",
+            "index": 10,
+            "range": 2,
+            "return_type": aerospike.MAP_RETURN_KEY_VALUE
+        }
+
+.. versionchanged:: 2.0.4
 
 .. _aerospike_policies:
 
 Policies
 --------
 
+.. rubric:: Commit Level Policy Options
+
+Specifies the number of replicas required to be successfully committed before returning success in a write operation to provide the desired consistency guarantee.
+
 .. data:: POLICY_COMMIT_LEVEL_ALL
 
-    An option of the *'commit_level'* policy
+    Return succcess only after successfully committing all replicas
 
 .. data:: POLICY_COMMIT_LEVEL_MASTER
 
-.. data:: POLICY_CONSISTENCY_ALL
+    Return succcess after successfully committing the master replica
 
-    An option of the *'consistency_level'* policy
+.. rubric:: Consistency Level Policy Options
+
+Specifies the number of replicas to be consulted in a read operation to provide the desired consistency guarantee.
 
 .. data:: POLICY_CONSISTENCY_ONE
 
+    Involve a single replica in the operation
+
+.. data:: POLICY_CONSISTENCY_ALL
+
+    Involve all replicas in the operation
+
+.. rubric:: Existence Policy Options
+
+Specifies the behavior for writing the record depending whether or not it exists.
+
 .. data:: POLICY_EXISTS_CREATE
 
-    An option of the *'exists'* policy
+    Create a record, ONLY if it doesn't exist
 
 .. data:: POLICY_EXISTS_CREATE_OR_REPLACE
 
+    Completely replace a record if it exists, otherwise create it
+
 .. data:: POLICY_EXISTS_IGNORE
+
+    Write the record, regardless of existence. (i.e. create or update)
 
 .. data:: POLICY_EXISTS_REPLACE
 
+    Completely replace a record, ONLY if it exists
+
 .. data:: POLICY_EXISTS_UPDATE
 
-.. data:: POLICY_GEN_EQ
+    Update a record, ONLY if it exists
 
-    An option of the *'gen'* policy
+.. rubric:: Generation Policy Options
 
-.. data:: POLICY_GEN_GT
+Specifies the behavior of record modifications with regard to the generation value.
 
 .. data:: POLICY_GEN_IGNORE
 
+    Write a record, regardless of generation
+
+.. data:: POLICY_GEN_EQ
+
+    Write a record, ONLY if generations are equal
+
+.. data:: POLICY_GEN_GT
+
+    Write a record, ONLY if local generation is greater-than remote generation
+
+.. rubric:: Key Policy Options
+
+Specifies the behavior for whether keys or digests should be sent to the cluster.
+
 .. data:: POLICY_KEY_DIGEST
 
-    An option of the *'key'* policy
+    Calculate the digest on the client-side and send it to the server
 
 .. data:: POLICY_KEY_SEND
 
-.. data:: POLICY_REPLICA_ANY
+    Send the key in addition to the digest. This policy causes a write operation to store the key on the server
 
-    An option of the *'replica'* policy
+.. rubric:: Replica Options
+
+Specifies which partition replica to read from.
 
 .. data:: POLICY_REPLICA_MASTER
 
+    Read from the partition master replica node
+
+.. data:: POLICY_REPLICA_ANY
+
+    Read from an unspecified replica node
+
+.. rubric:: Retry Policy Options
+
+Specifies the behavior of failed operations.
+
 .. data:: POLICY_RETRY_NONE
 
-    An option of the *'retry'* policy
+    Only attempt an operation once
 
 .. data:: POLICY_RETRY_ONCE
+
+    If an operation fails, attempt the operation one more time
 
 .. _aerospike_scan_constants:
 
@@ -324,9 +1100,16 @@ Serialization Constants
 
 .. data:: SERIALIZER_PYTHON
 
+    Use the cPickle serializer to handle unsupported types (default)
+
 .. data:: SERIALIZER_USER
 
+    Use a user-defined serializer to handle unsupported types. Must have \
+    been registered for the aerospike class or configured for the Client object
+
 .. data:: SERIALIZER_NONE
+
+    Do not serialize bins whose data type is unsupported
 
 .. versionadded:: 1.0.47
 
@@ -334,6 +1117,19 @@ Serialization Constants
 
 Miscellaneous
 -------------
+
+.. data:: __version__
+
+    A :class:`str` containing the module's version.
+
+    .. versionadded:: 1.0.54
+
+.. data:: null
+
+    A value for distinguishing a server-side null from a Python :py:obj:`None` .
+
+    .. deprecated:: 2.0.1
+        use the function :func:`aerospike.null` instead.
 
 .. data:: UDF_TYPE_LUA
 
@@ -345,6 +1141,10 @@ Miscellaneous
 
     An index whose values are of the aerospike integer data type
 
+.. data:: INDEX_GEO2DSPHERE
+
+    An index whose values are of the aerospike GetJSON data type
+    
 .. seealso:: `Data Types <http://www.aerospike.com/docs/guide/data-types.html>`_.
 
 .. data:: INDEX_TYPE_LIST
@@ -382,6 +1182,8 @@ Log Level
 Privileges
 ----------
 
+Permission codes define the type of permission granted for a user's role.
+
 .. data:: PRIV_READ
 
     The user is granted read access.
@@ -396,10 +1198,57 @@ Privileges
 
 .. data:: PRIV_SYS_ADMIN
 
-    The user is granted the ability to perform system administration operations.
+    The user is granted the ability to perform system administration operations. Global scope only.
 
 .. data:: PRIV_USER_ADMIN
 
-    The user is granted the ability to perform user administration operations.
+    The user is granted the ability to perform user administration operations. Global scope only.
 
+.. data:: PRIV_DATA_ADMIN
+
+    User can perform systems administration functions on a database that do not involve user administration. Examples include setting dynamic server configuration. Global scope only.
+
+
+.. _map_return_types:
+
+Map Return Types
+----------------
+
+Return types used by various map operations
+
+.. data:: MAP_RETURN_NONE
+
+    Do not return any value.
+
+.. data:: MAP_RETURN_INDEX
+
+    Return key index order.
+
+.. data:: MAP_RETURN_REVERSE_INDEX
+
+    Return reverse key order.
+
+.. data:: MAP_RETURN_RANK
+
+    Return value order.
+
+.. data:: MAP_RETURN_REVERSE_RANK
+
+    Return reserve value order.
+
+.. data:: MAP_RETURN_COUNT
+
+    Return count of items selected.
+
+.. data:: MAP_RETURN_KEY
+
+    Return key for single key read and key list for range read.
+
+.. data:: MAP_RETURN_VALUE
+
+    Return value for single key read and value list for range read.
+
+.. data:: MAP_RETURN_KEY_VALUE
+
+    Return key/value items. Note that key/value pairs will be returned as a list of tuples (i.e. [(key1, value1), (key2, value2)])
 

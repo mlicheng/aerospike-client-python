@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@
 #include "client.h"
 #include "conversions.h"
 #include "exceptions.h"
+#include "global_hosts.h"
+
+#define MAX_PORT_SIZE 6
 
 /**
  *******************************************************************************************************
@@ -39,6 +42,7 @@
 PyObject * AerospikeClient_Close(AerospikeClient * self, PyObject * args, PyObject * kwds)
 {
 	as_error err;
+	char *alias_to_search = NULL;
 
 	// Initialize error
 	as_error_init(&err);
@@ -48,37 +52,23 @@ PyObject * AerospikeClient_Close(AerospikeClient * self, PyObject * args, PyObje
 		goto CLEANUP;
 	}
 
-	if (!self->is_conn_16) {
-		as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
-		goto CLEANUP;
-	}
+	alias_to_search = return_search_string(self->as);
+	PyObject *py_persistent_item = NULL;
 
-	aerospike_close(self->as, &err);
-
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
-		error_to_pyobject(&err, &py_err);
-		PyObject *exception_type = raise_exception(&err);
-		PyErr_SetObject(exception_type, py_err);
-		Py_DECREF(py_err);
-		return NULL;
+	py_persistent_item = PyDict_GetItemString(py_global_hosts, alias_to_search); 
+	if (py_persistent_item) {
+		close_aerospike_object(self->as, &err, alias_to_search, py_persistent_item, false);
+	} else {
+		aerospike_close(self->as, &err);
 	}
 	self->is_conn_16 = false;
-
-	/*
-	 * Need to free memory allocated to host address string
-	 * in AerospikeClient_Type_Init.
-	 */ 
-	for( int i = 0; i < self->as->config.hosts_size; i++) {
-		free((void *) self->as->config.hosts[i].addr);
-	}
-
-	aerospike_destroy(self->as);
-	self->as = NULL;
+	PyMem_Free(alias_to_search);
+	alias_to_search = NULL;
 
 	Py_INCREF(Py_None);
+
 CLEANUP:
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -87,4 +77,59 @@ CLEANUP:
 		return NULL;
 	}
 	return Py_None;
+}
+
+char* return_search_string(aerospike *as)
+{
+	char port_str[MAX_PORT_SIZE];
+
+	int tot_address_size = 0;
+	int tot_port_size = 0;
+	int delimiter_size = 0;
+	int tot_user_size = 0;
+	int i =0;
+
+	//Calculate total size for search string
+	for (i = 0; i < (int)as->config.hosts->size; i++)
+	{
+		as_host *host = (as_host *)as_vector_get(as->config.hosts, i);
+		tot_address_size = tot_address_size + strlen(host->name);
+		tot_port_size = tot_port_size + MAX_PORT_SIZE;
+		delimiter_size = delimiter_size + 3;
+		tot_user_size = tot_user_size + strlen(as->config.user);
+	}
+
+	char* alias_to_search = (char*) PyMem_Malloc(tot_address_size + tot_user_size + tot_port_size + delimiter_size);
+	alias_to_search[0] = '\0';
+
+	for (i=0; i<as->config.hosts->size; i++) {
+		as_host *host = (as_host *)as_vector_get(as->config.hosts, i);
+		int port = host->port;
+		sprintf(port_str, "%d", port);
+		strcat(alias_to_search, host->name);
+		strcat(alias_to_search, ":");
+		strcat(alias_to_search, port_str);
+		strcat(alias_to_search, ":");
+		strcat(alias_to_search, as->config.user);
+		strcat(alias_to_search, ";");
+	}
+
+	return alias_to_search;
+}
+
+void close_aerospike_object(aerospike *as, as_error *err, char *alias_to_search, PyObject *py_persistent_item, bool do_destroy)
+{
+	if (((AerospikeGlobalHosts*)py_persistent_item)->ref_cnt == 1) {
+		PyDict_DelItemString(py_global_hosts, alias_to_search);
+		AerospikeGlobalHosts_Del(py_persistent_item);
+		aerospike_close(as, err);
+
+		if (do_destroy) {
+			Py_BEGIN_ALLOW_THREADS
+			aerospike_destroy(as);
+			Py_END_ALLOW_THREADS
+		}
+	} else {
+		((AerospikeGlobalHosts*)py_persistent_item)->ref_cnt--;
+	}
 }

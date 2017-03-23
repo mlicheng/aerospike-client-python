@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 typedef struct {
 	as_error error;
 	PyObject * callback;
+	AerospikeClient * client;
 } LocalData;
 
 
@@ -38,7 +39,7 @@ static bool each_result(const as_val * val, void * udata)
 {
 	bool rval = true;
 
-	if ( !val ) {
+	if (!val) {
 		return false;
 	}
 
@@ -57,7 +58,7 @@ static bool each_result(const as_val * val, void * udata)
 	gstate = PyGILState_Ensure();
 
 	// Convert as_val to a Python Object
-	val_to_pyobject(err, val, &py_result);
+	val_to_pyobject(data->client, err, val, &py_result);
 
 	// Build Python Function Arguments
 	py_arglist = PyTuple_New(1);
@@ -70,14 +71,14 @@ static bool each_result(const as_val * val, void * udata)
 	Py_DECREF(py_arglist);
 
 	// handle return value
-	if ( py_return == NULL ) {
+	if (!py_return) {
 		// an exception was raised, handle it (someday)
 		// for now, we bail from the loop
-		as_error_update(err, AEROSPIKE_ERR_PARAM, "Callback function contains an error");
-		rval = true;
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Callback function raised an exception");
+		rval = false;
 	}
-	else if (  PyBool_Check(py_return) ) {
-		if ( Py_False == py_return ) {
+	else if (PyBool_Check(py_return)) {
+		if (Py_False == py_return) {
 			rval = false;
 		}
 		else {
@@ -109,13 +110,14 @@ PyObject * AerospikeScan_Foreach(AerospikeScan * self, PyObject * args, PyObject
 	static char * kwlist[] = {"callback", "policy", "options", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|OO:foreach", kwlist, &py_callback, &py_policy, &py_options) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|OO:foreach", kwlist, &py_callback, &py_policy, &py_options) == false) {
 		return NULL;
 	}
 
 	// Create and initialize callback user-data
 	LocalData data;
 	data.callback = py_callback;
+	data.client = self->client;
 	as_error_init(&data.error);
 
 	// Aerospike Client Arguments
@@ -137,14 +139,14 @@ PyObject * AerospikeScan_Foreach(AerospikeScan * self, PyObject * args, PyObject
 	// Convert python policy object to as_policy_exists
 	pyobject_to_policy_scan(&err, py_policy, &scan_policy, &scan_policy_p,
 			&self->client->as->config.policies.scan);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 	if (py_options && PyDict_Check(py_options)) {
 		set_scan_options(&err, &self->scan, py_options);
-		if(err.code != AEROSPIKE_OK) {
-        	goto CLEANUP;
-        }
+		if (err.code != AEROSPIKE_OK) {
+			goto CLEANUP;
+		}
 	}
 
 	// We are spawning multiple threads
@@ -162,13 +164,13 @@ PyObject * AerospikeScan_Foreach(AerospikeScan * self, PyObject * args, PyObject
 
 CLEANUP:
 
-	if ( err.code != AEROSPIKE_OK || data.error.code != AEROSPIKE_OK) {
+	if (err.code != AEROSPIKE_OK || data.error.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL, *exception_type = NULL;
-		if ( err.code != AEROSPIKE_OK ){
+		if (err.code != AEROSPIKE_OK){
 			error_to_pyobject(&err, &py_err);
 			exception_type = raise_exception(&err);
 		}
-		if ( data.error.code != AEROSPIKE_OK){
+		if (data.error.code != AEROSPIKE_OK){
 			error_to_pyobject(&data.error, &py_err);
 			exception_type = raise_exception(&data.error);
 		}

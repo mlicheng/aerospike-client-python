@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,9 @@ AerospikeQuery * AerospikeQuery_Apply(AerospikeQuery * self, PyObject * args, Py
 		return NULL;
 	}
 
+	as_static_pool static_pool;
+	memset(&static_pool, 0, sizeof(static_pool));
+
 	// Aerospike error object
 	as_error err;
 	// Initialize error object
@@ -59,6 +62,8 @@ AerospikeQuery * AerospikeQuery_Apply(AerospikeQuery * self, PyObject * args, Py
 		goto CLEANUP;
 	}
 
+	self->client->is_client_put_serializer = false;
+
 	// Aerospike API Arguments
 	char * module = NULL;
 	char * function = NULL;
@@ -66,7 +71,7 @@ AerospikeQuery * AerospikeQuery_Apply(AerospikeQuery * self, PyObject * args, Py
 
 	if ( PyUnicode_Check(py_module) ){
 		py_umodule = PyUnicode_AsUTF8String(py_module);
-		module = PyString_AsString(py_umodule);
+		module = PyBytes_AsString(py_umodule);
 	}
 	else if ( PyString_Check(py_module) ) {
 		module = PyString_AsString(py_module);
@@ -78,7 +83,7 @@ AerospikeQuery * AerospikeQuery_Apply(AerospikeQuery * self, PyObject * args, Py
 
 	if ( PyUnicode_Check(py_function) ){
 		py_ufunction = PyUnicode_AsUTF8String(py_function);
-		function = PyString_AsString(py_ufunction);
+		function = PyBytes_AsString(py_ufunction);
 	}
 	else if ( PyString_Check(py_function) ) {
 		function = PyString_AsString(py_function);
@@ -96,7 +101,7 @@ AerospikeQuery * AerospikeQuery_Apply(AerospikeQuery * self, PyObject * args, Py
 		for ( int i = 0; i < size; i++ ) {
 			PyObject * py_val = PyList_GetItem(py_args, (Py_ssize_t)i);
 			as_val * val = NULL;
-			pyobject_to_val(self->client, &err, py_val, &val, &self->static_pool, SERIALIZER_PYTHON);
+			pyobject_to_val(self->client, &err, py_val, &val, &static_pool, SERIALIZER_PYTHON);
 			if ( err.code != AEROSPIKE_OK ) {
 				as_error_update(&err, err.code, NULL);
 				goto CLEANUP;
@@ -108,9 +113,12 @@ AerospikeQuery * AerospikeQuery_Apply(AerospikeQuery * self, PyObject * args, Py
 	}
 
 
+	Py_BEGIN_ALLOW_THREADS
 	as_query_apply(&self->query, module, function, (as_list *) arglist);
+	Py_END_ALLOW_THREADS
 
 CLEANUP:
+	POOL_DESTROY(&static_pool);
 
 	if (py_ufunction) {
 		Py_DECREF(py_ufunction);

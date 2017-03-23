@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_index.h>
+#include <aerospike/aerospike_key.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_error.h>
@@ -65,8 +66,8 @@ PyObject * AerospikeClient_Index_Integer_Create(AerospikeClient * self, PyObject
 	static char * kwlist[] = {"ns", "set", "bin", "name", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O:index_integer_create", kwlist,
-				&py_ns, &py_set, &py_bin, &py_name, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O:index_integer_create", kwlist,
+				&py_ns, &py_set, &py_bin, &py_name, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -83,7 +84,7 @@ PyObject * AerospikeClient_Index_Integer_Create(AerospikeClient * self, PyObject
 	// Convert python object to policy_info
 	pyobject_to_policy_info( &err, py_policy, &info_policy, &info_policy_p,
 			&self->as->config.policies.info);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -98,10 +99,10 @@ PyObject * AerospikeClient_Index_Integer_Create(AerospikeClient * self, PyObject
 	char *set_ptr = NULL;
 	if (PyUnicode_Check(py_set)) {
 		py_ustr_set = PyUnicode_AsUTF8String(py_set);
-		set_ptr = PyString_AsString(py_ustr_set);
-	} else if ( PyString_Check(py_set) ) {
+		set_ptr = PyBytes_AsString(py_ustr_set);
+	} else if (PyString_Check(py_set)) {
 		set_ptr = PyString_AsString(py_set);
-	} else if(py_set != Py_None){
+	} else if(py_set != Py_None) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Set should be string, unicode or None");
 		goto CLEANUP;
 	}
@@ -110,9 +111,11 @@ PyObject * AerospikeClient_Index_Integer_Create(AerospikeClient * self, PyObject
 	char *bin_ptr = NULL;
 	if (PyUnicode_Check(py_bin)) {
 		py_ustr_bin = PyUnicode_AsUTF8String(py_bin);
-		bin_ptr = PyString_AsString(py_ustr_bin);
-	} else if ( PyString_Check(py_bin) ) {
+		bin_ptr = PyBytes_AsString(py_ustr_bin);
+	} else if (PyString_Check(py_bin)) {
 		bin_ptr = PyString_AsString(py_bin);
+	} else if (PyByteArray_Check(py_bin)) {
+		bin_ptr = PyByteArray_AsString(py_bin);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Bin should be a string");
 		goto CLEANUP;
@@ -122,8 +125,8 @@ PyObject * AerospikeClient_Index_Integer_Create(AerospikeClient * self, PyObject
 	char *name = NULL;
 	if (PyUnicode_Check(py_name)) {
 		py_ustr_name = PyUnicode_AsUTF8String(py_name);
-		name = PyString_AsString(py_ustr_name);
-	} else if ( PyString_Check(py_name) ) {
+		name = PyBytes_AsString(py_ustr_name);
+	} else if (PyString_Check(py_name)) {
 		name = PyString_AsString(py_name);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Index name should be string or unicode");
@@ -131,12 +134,16 @@ PyObject * AerospikeClient_Index_Integer_Create(AerospikeClient * self, PyObject
 	}
 
 	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_index_create_complex(self->as, &err, &task, info_policy_p, namespace, set_ptr, bin_ptr, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC);
-	if ( err.code != AEROSPIKE_OK ) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	} else {
+		Py_BEGIN_ALLOW_THREADS
 		aerospike_index_create_wait(&err, &task, 2000);
+		Py_END_ALLOW_THREADS
 	}
 
 CLEANUP:
@@ -149,7 +156,7 @@ CLEANUP:
 	if(py_ustr_name) {
 		Py_DECREF(py_ustr_name);
 	}
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -201,8 +208,8 @@ PyObject * AerospikeClient_Index_String_Create(AerospikeClient * self, PyObject 
 	static char * kwlist[] = {"ns", "set", "bin", "name", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O:index_string_create", kwlist,
-				&py_ns, &py_set, &py_bin, &py_name, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O:index_string_create", kwlist,
+				&py_ns, &py_set, &py_bin, &py_name, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -219,7 +226,7 @@ PyObject * AerospikeClient_Index_String_Create(AerospikeClient * self, PyObject 
 	// Convert python object to policy_info
 	pyobject_to_policy_info( &err, py_policy, &info_policy, &info_policy_p,
 			&self->as->config.policies.info);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -234,8 +241,8 @@ PyObject * AerospikeClient_Index_String_Create(AerospikeClient * self, PyObject 
 	char *set_ptr = NULL;
 	if (PyUnicode_Check(py_set)) {
 		py_ustr_set = PyUnicode_AsUTF8String(py_set);
-		set_ptr = PyString_AsString(py_ustr_set);
-	} else if ( PyString_Check(py_set) ) {
+		set_ptr = PyBytes_AsString(py_ustr_set);
+	} else if (PyString_Check(py_set)) {
 		set_ptr = PyString_AsString(py_set);
 	} else if(py_set != Py_None) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Set should be string, unicode or None");
@@ -246,9 +253,11 @@ PyObject * AerospikeClient_Index_String_Create(AerospikeClient * self, PyObject 
 	char *bin_ptr = NULL;
 	if (PyUnicode_Check(py_bin)) {
 		py_ustr_bin = PyUnicode_AsUTF8String(py_bin);
-		bin_ptr = PyString_AsString(py_ustr_bin);
-	} else if ( PyString_Check(py_bin) ) {
+		bin_ptr = PyBytes_AsString(py_ustr_bin);
+	} else if (PyString_Check(py_bin)) {
 		bin_ptr = PyString_AsString(py_bin);
+	} else if (PyByteArray_Check(py_bin)) {
+		bin_ptr = PyByteArray_AsString(py_bin);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Bin should be a string");
 		goto CLEANUP;
@@ -258,8 +267,8 @@ PyObject * AerospikeClient_Index_String_Create(AerospikeClient * self, PyObject 
 	char *name = NULL;
 	if (PyUnicode_Check(py_name)) {
 		py_ustr_name = PyUnicode_AsUTF8String(py_name);
-		name = PyString_AsString(py_ustr_name);
-	} else if ( PyString_Check(py_name) ) {
+		name = PyBytes_AsString(py_ustr_name);
+	} else if (PyString_Check(py_name)) {
 		name = PyString_AsString(py_name);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Index name should be string or unicode");
@@ -267,12 +276,17 @@ PyObject * AerospikeClient_Index_String_Create(AerospikeClient * self, PyObject 
 	}
 
 	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_index_create_complex(self->as, &err, &task, info_policy_p, namespace, set_ptr, bin_ptr, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING);
-	if ( err.code != AEROSPIKE_OK ) {
+	Py_END_ALLOW_THREADS
+
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	} else {
+		Py_BEGIN_ALLOW_THREADS
 		aerospike_index_create_wait(&err, &task, 2000);
+		Py_END_ALLOW_THREADS
 	}
 
 CLEANUP:
@@ -285,7 +299,7 @@ CLEANUP:
 	if(py_ustr_name) {
 		Py_DECREF(py_ustr_name);
 	}
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -332,8 +346,8 @@ PyObject * AerospikeClient_Index_Remove(AerospikeClient * self, PyObject *args, 
 	static char * kwlist[] = {"ns", "name", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OO|O:index_remove", kwlist,
-				&py_ns, &py_name, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OO|O:index_remove", kwlist,
+				&py_ns, &py_name, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -350,7 +364,7 @@ PyObject * AerospikeClient_Index_Remove(AerospikeClient * self, PyObject *args, 
 	// Convert python object to policy_info
 	pyobject_to_policy_info( &err, py_policy, &info_policy, &info_policy_p,
 			&self->as->config.policies.info);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -365,8 +379,8 @@ PyObject * AerospikeClient_Index_Remove(AerospikeClient * self, PyObject *args, 
 	char *name = NULL;
 	if (PyUnicode_Check(py_name)) {
 		py_ustr_name = PyUnicode_AsUTF8String(py_name);
-		name = PyString_AsString(py_ustr_name);
-	} else if ( PyString_Check(py_name) ) {
+		name = PyBytes_AsString(py_ustr_name);
+	} else if (PyString_Check(py_name)) {
 		name = PyString_AsString(py_name);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Index name should be string or unicode");
@@ -374,8 +388,10 @@ PyObject * AerospikeClient_Index_Remove(AerospikeClient * self, PyObject *args, 
 	}
 
 	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_index_remove(self->as, &err, info_policy_p, namespace, name);
-	if ( err.code != AEROSPIKE_OK ) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	}
@@ -385,7 +401,7 @@ CLEANUP:
 	if (py_ustr_name) {
 		Py_DECREF(py_ustr_name);
 	}
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -425,8 +441,8 @@ PyObject * AerospikeClient_Index_List_Create(AerospikeClient * self, PyObject *a
 	static char * kwlist[] = {"ns", "set", "bin", "index_datatype", "name", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO|O:index_list_create", kwlist,
-				&py_ns, &py_set, &py_bin, &py_datatype, &py_name, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO|O:index_list_create", kwlist,
+				&py_ns, &py_set, &py_bin, &py_datatype, &py_name, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -436,13 +452,13 @@ PyObject * AerospikeClient_Index_List_Create(AerospikeClient * self, PyObject *a
 	}
 
 	if (!self->is_conn_16) {
-        as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
-        goto CLEANUP;
-    }
+		as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
+		goto CLEANUP;
+	}
 
 	// Convert python object to policy_info
 	pyobject_to_policy_info( &err, py_policy, &info_policy, &info_policy_p, &self->as->config.policies.info);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -457,8 +473,8 @@ PyObject * AerospikeClient_Index_List_Create(AerospikeClient * self, PyObject *a
 	char *set_ptr = NULL;
 	if (PyUnicode_Check(py_set)) {
 		py_ustr_set = PyUnicode_AsUTF8String(py_set);
-		set_ptr = PyString_AsString(py_ustr_set);
-	} else if ( PyString_Check(py_set) ) {
+		set_ptr = PyBytes_AsString(py_ustr_set);
+	} else if (PyString_Check(py_set)) {
 		set_ptr = PyString_AsString(py_set);
 	} else if( py_set != Py_None) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Set should be string, unicode or None");
@@ -469,9 +485,11 @@ PyObject * AerospikeClient_Index_List_Create(AerospikeClient * self, PyObject *a
 	char *bin_ptr = NULL;
 	if (PyUnicode_Check(py_bin)) {
 		py_ustr_bin = PyUnicode_AsUTF8String(py_bin);
-		bin_ptr = PyString_AsString(py_ustr_bin);
-	} else if ( PyString_Check(py_bin) ) {
+		bin_ptr = PyBytes_AsString(py_ustr_bin);
+	} else if (PyString_Check(py_bin)) {
 		bin_ptr = PyString_AsString(py_bin);
+	} else if (PyByteArray_Check(py_bin)) {
+		bin_ptr = PyByteArray_AsString(py_bin);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Bin should be a string");
 		goto CLEANUP;
@@ -481,32 +499,37 @@ PyObject * AerospikeClient_Index_List_Create(AerospikeClient * self, PyObject *a
 	char *name = NULL;
 	if (PyUnicode_Check(py_name)) {
 		py_ustr_name = PyUnicode_AsUTF8String(py_name);
-		name = PyString_AsString(py_ustr_name);
-	} else if ( PyString_Check(py_name) ) {
+		name = PyBytes_AsString(py_ustr_name);
+	} else if (PyString_Check(py_name)) {
 		name = PyString_AsString(py_name);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Index name should be string or unicode");
 		goto CLEANUP;
 	}
 
-	int type = 0;
-	if(PyInt_Check(py_datatype)) {
+	long type = 0;
+	if (PyInt_Check(py_datatype)) {
 		type = PyInt_AsLong(py_datatype);
-	} else if ( PyLong_Check(py_datatype) ) {
-		type = PyLong_AsLongLong(py_datatype);
-        if(-1 == type) {
-		    as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-    		goto CLEANUP;
-        }
+	} else if (PyLong_Check(py_datatype)) {
+		type = PyLong_AsLong(py_datatype);
+		if (type == -1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+			}
+		}
 	}
 
 	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_index_create_complex(self->as, &err, &task, info_policy_p, namespace, set_ptr, bin_ptr, name, AS_INDEX_TYPE_LIST, type);
-	if ( err.code != AEROSPIKE_OK ) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	} else {
+		Py_BEGIN_ALLOW_THREADS
 		aerospike_index_create_wait(&err, &task, 2000);
+		Py_END_ALLOW_THREADS
 	}
 
 CLEANUP:
@@ -519,7 +542,7 @@ CLEANUP:
 	if(py_ustr_name) {
 		Py_DECREF(py_ustr_name);
 	}
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -559,8 +582,8 @@ PyObject * AerospikeClient_Index_Map_Keys_Create(AerospikeClient * self, PyObjec
 	static char * kwlist[] = {"ns", "set", "bin", "index_datatype", "name", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO|O:index_map_keys_create", kwlist,
-				&py_ns, &py_set, &py_bin, &py_datatype, &py_name, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO|O:index_map_keys_create", kwlist,
+				&py_ns, &py_set, &py_bin, &py_datatype, &py_name, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -570,13 +593,13 @@ PyObject * AerospikeClient_Index_Map_Keys_Create(AerospikeClient * self, PyObjec
 	}
 
 	if (!self->is_conn_16) {
-        as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
-        goto CLEANUP;
-    }
+		as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
+		goto CLEANUP;
+	}
 
 	// Convert python object to policy_info
 	pyobject_to_policy_info( &err, py_policy, &info_policy, &info_policy_p, &self->as->config.policies.info);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -591,8 +614,8 @@ PyObject * AerospikeClient_Index_Map_Keys_Create(AerospikeClient * self, PyObjec
 	char *set_ptr = NULL;
 	if (PyUnicode_Check(py_set)) {
 		py_ustr_set = PyUnicode_AsUTF8String(py_set);
-		set_ptr = PyString_AsString(py_ustr_set);
-	} else if ( PyString_Check(py_set) ) {
+		set_ptr = PyBytes_AsString(py_ustr_set);
+	} else if (PyString_Check(py_set)) {
 		set_ptr = PyString_AsString(py_set);
 	} else if(py_set != Py_None) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Set should be string, unicode or None");
@@ -603,9 +626,11 @@ PyObject * AerospikeClient_Index_Map_Keys_Create(AerospikeClient * self, PyObjec
 	char *bin_ptr = NULL;
 	if (PyUnicode_Check(py_bin)) {
 		py_ustr_bin = PyUnicode_AsUTF8String(py_bin);
-		bin_ptr = PyString_AsString(py_ustr_bin);
-	} else if ( PyString_Check(py_bin) ) {
+		bin_ptr = PyBytes_AsString(py_ustr_bin);
+	} else if (PyString_Check(py_bin)) {
 		bin_ptr = PyString_AsString(py_bin);
+	} else if (PyByteArray_Check(py_bin)) {
+		bin_ptr = PyByteArray_AsString(py_bin);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Bin should be a string");
 		goto CLEANUP;
@@ -615,32 +640,38 @@ PyObject * AerospikeClient_Index_Map_Keys_Create(AerospikeClient * self, PyObjec
 	char *name = NULL;
 	if (PyUnicode_Check(py_name)) {
 		py_ustr_name = PyUnicode_AsUTF8String(py_name);
-		name = PyString_AsString(py_ustr_name);
-	} else if ( PyString_Check(py_name) ) {
+		name = PyBytes_AsString(py_ustr_name);
+	} else if (PyString_Check(py_name)) {
 		name = PyString_AsString(py_name);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Index name should be string or unicode");
 		goto CLEANUP;
 	}
 
-	int type = 0;
-	if(PyInt_Check(py_datatype)) {
+	long type = 0;
+	if (PyInt_Check(py_datatype)) {
 		type = PyInt_AsLong(py_datatype);
-	} else if ( PyLong_Check(py_datatype) ) {
-		type = PyLong_AsLongLong(py_datatype);
-        if(-1 == type) {
-		    as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-    		goto CLEANUP;
-        }
+	} else if (PyLong_Check(py_datatype)) {
+		type = PyLong_AsLong(py_datatype);
+		if (type == -1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+				goto CLEANUP;
+			}
+		}
 	}
 
 	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_index_create_complex(self->as, &err, &task, info_policy_p, namespace, set_ptr, bin_ptr, name, AS_INDEX_TYPE_MAPKEYS, type);
-	if ( err.code != AEROSPIKE_OK ) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	} else {
+		Py_BEGIN_ALLOW_THREADS
 		aerospike_index_create_wait(&err, &task, 2000);
+		Py_END_ALLOW_THREADS
 	}
 
 CLEANUP:
@@ -653,7 +684,7 @@ CLEANUP:
 	if(py_ustr_name) {
 		Py_DECREF(py_ustr_name);
 	}
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -693,8 +724,8 @@ PyObject * AerospikeClient_Index_Map_Values_Create(AerospikeClient * self, PyObj
 	static char * kwlist[] = {"ns", "set", "bin", "index_datatype", "name", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO|O:index_map_values_create", kwlist,
-				&py_ns, &py_set, &py_bin, &py_datatype, &py_name, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOOOO|O:index_map_values_create", kwlist,
+				&py_ns, &py_set, &py_bin, &py_datatype, &py_name, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -705,13 +736,13 @@ PyObject * AerospikeClient_Index_Map_Values_Create(AerospikeClient * self, PyObj
 	}
 
 	if (!self->is_conn_16) {
-        as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
-        goto CLEANUP;
-    }
+		as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
+		goto CLEANUP;
+	}
 
 	// Convert python object to policy_info
 	pyobject_to_policy_info( &err, py_policy, &info_policy, &info_policy_p, &self->as->config.policies.info);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -726,10 +757,10 @@ PyObject * AerospikeClient_Index_Map_Values_Create(AerospikeClient * self, PyObj
 	char *set_ptr = NULL;
 	if (PyUnicode_Check(py_set)) {
 		py_ustr_set = PyUnicode_AsUTF8String(py_set);
-		set_ptr = PyString_AsString(py_ustr_set);
-	} else if ( PyString_Check(py_set) ) {
+		set_ptr = PyBytes_AsString(py_ustr_set);
+	} else if (PyString_Check(py_set)) {
 		set_ptr = PyString_AsString(py_set);
-	} else if(py_set != Py_None){
+	} else if(py_set != Py_None) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Set should be string, unicode or None");
 		goto CLEANUP;
 	}
@@ -738,9 +769,11 @@ PyObject * AerospikeClient_Index_Map_Values_Create(AerospikeClient * self, PyObj
 	char *bin_ptr = NULL;
 	if (PyUnicode_Check(py_bin)) {
 		py_ustr_bin = PyUnicode_AsUTF8String(py_bin);
-		bin_ptr = PyString_AsString(py_ustr_bin);
-	} else if ( PyString_Check(py_bin) ) {
+		bin_ptr = PyBytes_AsString(py_ustr_bin);
+	} else if (PyString_Check(py_bin)) {
 		bin_ptr = PyString_AsString(py_bin);
+	} else if (PyByteArray_Check(py_bin)) {
+		bin_ptr = PyByteArray_AsString(py_bin);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Bin should be a string");
 		goto CLEANUP;
@@ -750,8 +783,8 @@ PyObject * AerospikeClient_Index_Map_Values_Create(AerospikeClient * self, PyObj
 	char *name = NULL;
 	if (PyUnicode_Check(py_name)) {
 		py_ustr_name = PyUnicode_AsUTF8String(py_name);
-		name = PyString_AsString(py_ustr_name);
-	} else if ( PyString_Check(py_name) ) {
+		name = PyBytes_AsString(py_ustr_name);
+	} else if (PyString_Check(py_name)) {
 		name = PyString_AsString(py_name);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Index name should be string or unicode");
@@ -759,23 +792,29 @@ PyObject * AerospikeClient_Index_Map_Values_Create(AerospikeClient * self, PyObj
 	}
 
 	int type = 0;
-	if(PyInt_Check(py_datatype)) {
+	if (PyInt_Check(py_datatype)) {
 		type = PyInt_AsLong(py_datatype);
-	} else if ( PyLong_Check(py_datatype) ) {
+	} else if (PyLong_Check(py_datatype)) {
 		type = PyLong_AsLongLong(py_datatype);
-        if(-1 == type) {
-		    as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-    		goto CLEANUP;
-        }
+		if (type == -1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+				goto CLEANUP;
+			}
+		}
 	}
 
 	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_index_create_complex(self->as, &err, &task, info_policy_p, namespace, set_ptr, bin_ptr, name, AS_INDEX_TYPE_MAPVALUES, type);
-	if ( err.code != AEROSPIKE_OK ) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	} else {
+		Py_BEGIN_ALLOW_THREADS
 		aerospike_index_create_wait(&err, &task, 2000);
+		Py_END_ALLOW_THREADS
 	}
 
 CLEANUP:
@@ -788,7 +827,139 @@ CLEANUP:
 	if(py_ustr_name) {
 		Py_DECREF(py_ustr_name);
 	}
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL;
+		error_to_pyobject(&err, &py_err);
+		PyObject *exception_type = raise_exception(&err);
+		if(PyObject_HasAttrString(exception_type, "name")) {
+			PyObject_SetAttrString(exception_type, "name", py_name);
+		}
+		PyErr_SetObject(exception_type, py_err);
+		Py_DECREF(py_err);
+		return NULL;
+	}
+
+	return PyLong_FromLong(0);
+}
+PyObject * AerospikeClient_Index_2dsphere_Create(AerospikeClient * self, PyObject *args, PyObject * kwds)
+{
+	// Initialize error
+	as_error err;
+	as_error_init(&err);
+
+	// Python Function Arguments
+	PyObject * py_policy = NULL;
+	PyObject * py_ns = NULL;
+	PyObject * py_set = NULL;
+	PyObject * py_bin = NULL;
+	PyObject * py_name = NULL;
+	PyObject *py_ustr_set = NULL;
+	PyObject *py_ustr_bin = NULL;
+	PyObject *py_ustr_name = NULL;
+
+	as_policy_info info_policy;
+	as_policy_info *info_policy_p = NULL;
+	as_index_task task;
+
+	// Python Function Keyword Arguments
+	static char * kwlist[] = {"ns", "set", "bin", "name", "policy", NULL};
+
+	// Python Function Argument Parsing
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOOO|O:index_geo2dsphere_create", kwlist,
+				&py_ns, &py_set, &py_bin, &py_name, &py_policy) == false) {
+		return NULL;
+	}
+
+	if (!self || !self->as) {
+		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid aerospike object");
+		goto CLEANUP;
+	}
+
+	if (!self->is_conn_16) {
+		as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "No connection to aerospike cluster");
+		goto CLEANUP;
+	}
+
+	if (!aerospike_has_geo(self->as)) {
+		as_error_update(&err, AEROSPIKE_ERR_CLUSTER, "Server does not support geospatial indexes");
+		goto CLEANUP;
+	}
+
+	// Convert python object to policy_info
+	pyobject_to_policy_info( &err, py_policy, &info_policy, &info_policy_p, &self->as->config.policies.info);
+	if (err.code != AEROSPIKE_OK) {
+		goto CLEANUP;
+	}
+
+	// Convert python object into namespace string
+	if( !PyString_Check(py_ns) ) {
+		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Namespace should be a string");
+		goto CLEANUP;
+	}
+	char *namespace = PyString_AsString(py_ns);
+
+	// Convert python object into set string
+	char *set_ptr = NULL;
+	if (PyUnicode_Check(py_set)) {
+		py_ustr_set = PyUnicode_AsUTF8String(py_set);
+		set_ptr = PyBytes_AsString(py_ustr_set);
+	} else if (PyString_Check(py_set)) {
+		set_ptr = PyString_AsString(py_set);
+	} else if(py_set != Py_None) {
+		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Set should be string, unicode or None");
+		goto CLEANUP;
+	}
+
+	// Convert python object into bin string
+	char *bin_ptr = NULL;
+	if (PyUnicode_Check(py_bin)) {
+		py_ustr_bin = PyUnicode_AsUTF8String(py_bin);
+		bin_ptr = PyBytes_AsString(py_ustr_bin);
+	} else if (PyString_Check(py_bin)) {
+		bin_ptr = PyString_AsString(py_bin);
+	} else if (PyByteArray_Check(py_bin)) {
+		bin_ptr = PyByteArray_AsString(py_bin);
+	} else {
+		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Bin should be a string");
+		goto CLEANUP;
+	}
+
+	// Convert PyObject into the name of the index
+	char *name = NULL;
+	if (PyUnicode_Check(py_name)) {
+		py_ustr_name = PyUnicode_AsUTF8String(py_name);
+		name = PyBytes_AsString(py_ustr_name);
+	} else if (PyString_Check(py_name)) {
+		name = PyString_AsString(py_name);
+	} else {
+		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Index name should be string or unicode");
+		goto CLEANUP;
+	}
+
+	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
+	aerospike_index_create_complex(self->as, &err, &task, info_policy_p, namespace, set_ptr, bin_ptr, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_GEO2DSPHERE);
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
+		as_error_update(&err, err.code, NULL);
+		goto CLEANUP;
+	} else {
+		Py_BEGIN_ALLOW_THREADS
+		aerospike_index_create_wait(&err, &task, 2000);
+		Py_END_ALLOW_THREADS
+	}
+
+CLEANUP:
+	if(py_ustr_set) {
+		Py_DECREF(py_ustr_set);
+	}
+	if(py_ustr_bin) {
+		Py_DECREF(py_ustr_bin);
+	}
+	if(py_ustr_name) {
+		Py_DECREF(py_ustr_name);
+	}
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,10 +99,6 @@ static PyObject * AerospikeLList_Type_New(PyTypeObject * type, PyObject * args, 
 
 	self = (AerospikeLList *) type->tp_alloc(type, 0);
 
-	if ( self == NULL ) {
-		return NULL;
-	}
-
 	return (PyObject *) self;
 }
 
@@ -114,8 +110,8 @@ static int AerospikeLList_Type_Init(AerospikeLList * self, PyObject * args, PyOb
 
 	static char * kwlist[] = {"key", "bin", "module", NULL};
 
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "Os|s:llist", kwlist, &py_key,
-				&bin_name, &module) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "Os|s:llist", kwlist, &py_key,
+				&bin_name, &module) == false) {
 		return -1;
 	}
 
@@ -150,55 +146,58 @@ static int AerospikeLList_Type_Init(AerospikeLList * self, PyObject * args, PyOb
 
 static void AerospikeLList_Type_Dealloc(PyObject * self)
 {
-	self->ob_type->tp_free((PyObject *) self);
+	Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
 /*******************************************************************************
  * PYTHON TYPE DESCRIPTOR
  ******************************************************************************/
-
 static PyTypeObject AerospikeLList_Type = {
-	PyObject_HEAD_INIT(NULL)
-
-		.ob_size			= 0,
-	.tp_name			= "aerospike.LList",
-	.tp_basicsize		= sizeof(AerospikeLList),
-	.tp_itemsize		= 0,
-	.tp_dealloc			= (destructor) AerospikeLList_Type_Dealloc,
-	.tp_print			= 0,
-	.tp_getattr			= 0,
-	.tp_setattr			= 0,
-	.tp_compare			= 0,
-	.tp_repr			= 0,
-	.tp_as_number		= 0,
-	.tp_as_sequence		= 0,
-	.tp_as_mapping		= 0,
-	.tp_hash			= 0,
-	.tp_call			= 0,
-	.tp_str				= 0,
-	.tp_getattro		= 0,
-	.tp_setattro		= 0,
-	.tp_as_buffer		= 0,
-	.tp_flags			= Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-	.tp_doc				=
-		"The LList class assists in populating the parameters of a LList.\n",
-	.tp_traverse		= 0,
-	.tp_clear			= 0,
-	.tp_richcompare		= 0,
-	.tp_weaklistoffset	= 0,
-	.tp_iter			= 0,
-	.tp_iternext		= 0,
-	.tp_methods			= AerospikeLList_Type_Methods,
-	.tp_members			= 0,
-	.tp_getset			= 0,
-	.tp_base			= 0,
-	.tp_dict			= 0,
-	.tp_descr_get		= 0,
-	.tp_descr_set		= 0,
-	.tp_dictoffset		= 0,
-	.tp_init			= (initproc) AerospikeLList_Type_Init,
-	.tp_alloc			= 0,
-	.tp_new				= AerospikeLList_Type_New
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"aerospike.LList",                  // tp_name
+	sizeof(AerospikeLList),             // tp_basicsize
+	0,                                  // tp_itemsize
+	(destructor) AerospikeLList_Type_Dealloc,
+	                                    // tp_dealloc
+	0,                                  // tp_print
+	0,                                  // tp_getattr
+	0,                                  // tp_setattr
+	0,                                  // tp_compare
+	0,                                  // tp_repr
+	0,                                  // tp_as_number
+	0,                                  // tp_as_sequence
+	0,                                  // tp_as_mapping
+	0,                                  // tp_hash
+	0,                                  // tp_call
+	0,                                  // tp_str
+	0,                                  // tp_getattro
+	0,                                  // tp_setattro
+	0,                                  // tp_as_buffer
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+	                                    // tp_flags
+	"The LList class assists in populating the parameters of a LList.\n",
+	                                    // tp_doc
+	0,                                  // tp_traverse
+	0,                                  // tp_clear
+	0,                                  // tp_richcompare
+	0,                                  // tp_weaklistoffset
+	0,                                  // tp_iter
+	0,                                  // tp_iternext
+	AerospikeLList_Type_Methods,        // tp_methods
+	0,                                  // tp_members
+	0,                                  // tp_getset
+	0,                                  // tp_base
+	0,                                  // tp_dict
+	0,                                  // tp_descr_get
+	0,                                  // tp_descr_set
+	0,                                  // tp_dictoffset
+	(initproc) AerospikeLList_Type_Init,
+	                                    // tp_init
+	0,                                  // tp_alloc
+	AerospikeLList_Type_New,      		// tp_new
+	0,                                  // tp_free
+	0,                                  // tp_is_gc
+	0                                   // tp_bases
 };
 
 /*******************************************************************************
@@ -226,8 +225,8 @@ AerospikeLList * AerospikeLList_New(AerospikeClient * client, PyObject * args, P
 		PyObject * py_key = NULL;
 		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
-			if(&self->key) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			if (&self->key) {
 				key_to_pyobject(&err, &self->key, &py_key);
 				PyObject_SetAttrString(exception_type, "key", py_key);
 				Py_DECREF(py_key);
@@ -235,8 +234,8 @@ AerospikeLList * AerospikeLList_New(AerospikeClient * client, PyObject * args, P
 				PyObject_SetAttrString(exception_type, "key", Py_None);
 			}
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
-			if(&self->bin_name) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			if (&self->bin_name) {
 				PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
 				PyObject_SetAttrString(exception_type, "bin", py_bins);
 				Py_DECREF(py_bins);

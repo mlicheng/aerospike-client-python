@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,11 +24,13 @@
 #include <stdlib.h>
 #include "exceptions.h"
 #include "exception_types.h"
+#include "macros.h"
+
 static PyObject *module;
 
 PyObject * AerospikeException_New(void)
 {
-	module = Py_InitModule3("aerospike.exception", NULL, "Exception objects");
+	MOD_DEF(module, "aerospike.exception", "Exception objects", NULL);
 
 	struct exceptions exceptions_array;
 
@@ -37,12 +39,13 @@ PyObject * AerospikeException_New(void)
 	struct server_exceptions_struct server_array = { 
 		{&exceptions_array.InvalidRequest, &exceptions_array.ServerFull, &exceptions_array.NoXDR, 
 			&exceptions_array.UnsupportedFeature, &exceptions_array.DeviceOverload, &exceptions_array.NamespaceNotFound, 
-			&exceptions_array.ForbiddenError, &exceptions_array.QueryError, &exceptions_array.ClusterError},
+			&exceptions_array.ForbiddenError, &exceptions_array.QueryError, &exceptions_array.ClusterError, 
+			&exceptions_array.InvalidGeoJSON},
 		{"InvalidRequest", "ServerFull", "NoXDR", "UnsupportedFeature", "DeviceOverload", "NamespaceNotFound", 
-			"ForbiddenError", "QueryError", "ClusterError"},
+			"ForbiddenError", "QueryError", "ClusterError", "InvalidGeoJSON"},
 		{AEROSPIKE_ERR_REQUEST_INVALID, AEROSPIKE_ERR_SERVER_FULL, AEROSPIKE_ERR_NO_XDR, 
 			AEROSPIKE_ERR_UNSUPPORTED_FEATURE, AEROSPIKE_ERR_DEVICE_OVERLOAD, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND,  
-			AEROSPIKE_ERR_FAIL_FORBIDDEN, AEROSPIKE_ERR_QUERY, AEROSPIKE_ERR_CLUSTER}
+			AEROSPIKE_ERR_FAIL_FORBIDDEN, AEROSPIKE_ERR_QUERY, AEROSPIKE_ERR_CLUSTER, AEROSPIKE_ERR_GEO_INVALID_GEOJSON}
 	};
 
 	struct record_exceptions_struct record_array = { 
@@ -173,7 +176,7 @@ PyObject * AerospikeException_New(void)
 	int count = sizeof(server_array.server_exceptions)/sizeof(server_array.server_exceptions[0]);
 	int i;
 	PyObject **current_exception;
-	for(i=0; i < count; i++) {
+	for (i=0; i < count; i++) {
 		current_exception = server_array.server_exceptions[i];
 		char * name = server_array.server_exceptions_name[i];
 		char prefix[40] = "exception.";
@@ -200,11 +203,12 @@ PyObject * AerospikeException_New(void)
 	exceptions_array.RecordError = PyErr_NewException("exception.RecordError", exceptions_array.ServerError, py_record_dict);
 	Py_INCREF(exceptions_array.RecordError);
 	Py_DECREF(py_record_dict);
+	PyObject_SetAttrString(exceptions_array.RecordError, "code", Py_None);
 	PyModule_AddObject(module, "RecordError", exceptions_array.RecordError);
 
 	//int count = sizeof(record_exceptions)/sizeof(record_exceptions[0]);
 	count = sizeof(record_array.record_exceptions)/sizeof(record_array.record_exceptions[0]);
-	for(i=0; i < count; i++) {
+	for (i=0; i < count; i++) {
 		current_exception = record_array.record_exceptions[i];
 		char * name = record_array.record_exceptions_name[i];
 		char prefix[40] = "exception.";
@@ -223,10 +227,13 @@ PyObject * AerospikeException_New(void)
 	exceptions_array.IndexError = PyErr_NewException("exception.IndexError", exceptions_array.ServerError, py_index_dict);
 	Py_INCREF(exceptions_array.IndexError);
 	Py_DECREF(py_index_dict);
+	py_code = PyInt_FromLong(AEROSPIKE_ERR_INDEX);
+	PyObject_SetAttrString(exceptions_array.IndexError, "code", py_code);
+	Py_DECREF(py_code);
 	PyModule_AddObject(module, "IndexError", exceptions_array.IndexError);
 
 	count = sizeof(index_array.index_exceptions)/sizeof(index_array.index_exceptions[0]);
-	for(i=0; i < count; i++) {
+	for (i=0; i < count; i++) {
 		current_exception = index_array.index_exceptions[i];
 		char * name = index_array.index_exceptions_name[i];
 		char prefix[40] = "exception.";
@@ -268,10 +275,11 @@ PyObject * AerospikeException_New(void)
 	//Admin exceptions
 	exceptions_array.AdminError = PyErr_NewException("exception.AdminError", exceptions_array.ServerError, NULL);
 	Py_INCREF(exceptions_array.AdminError);
+	PyObject_SetAttrString(exceptions_array.AdminError, "code", Py_None);
 	PyModule_AddObject(module, "AdminError", exceptions_array.AdminError);
 
 	count = sizeof(admin_array.admin_exceptions)/sizeof(admin_array.admin_exceptions[0]);
-	for(i=0; i < count; i++) {
+	for (i=0; i < count; i++) {
 		current_exception = admin_array.admin_exceptions[i];
 		char * name = admin_array.admin_exceptions_name[i];
 		char prefix[40] = "exception.";
@@ -303,12 +311,13 @@ PyObject * AerospikeException_New(void)
 	PyDict_SetItemString(py_ldt_dict, "key", Py_None);
 	PyDict_SetItemString(py_ldt_dict, "bin", Py_None);
 	exceptions_array.LDTError = PyErr_NewException("exception.LDTError", exceptions_array.ServerError, py_ldt_dict);
+	PyObject_SetAttrString(exceptions_array.LDTError, "code", Py_None);
 	Py_INCREF(exceptions_array.LDTError);
 	Py_DECREF(py_ldt_dict);
 	PyModule_AddObject(module, "LDTError", exceptions_array.LDTError);
 
 	count = sizeof(ldt_array.ldt_exceptions)/sizeof(ldt_array.ldt_exceptions[0]);
-	for(i=0; i < count; i++) {
+	for (i=0; i < count; i++) {
 		current_exception = ldt_array.ldt_exceptions[i];
 		char * name = ldt_array.ldt_exceptions_name[i];
 		char prefix[40] = "exception.";
@@ -328,28 +337,28 @@ PyObject* raise_exception(as_error *err) {
 	PyObject * py_module_dict = PyModule_GetDict(module);
 	char * err_msg= err->message, *err_code = err->message;
 	char *final_code = NULL;
-	if(err->code == AEROSPIKE_ERR_UDF) {
-		while(strstr(err_code, ": ") != NULL) {
+	if (err->code == AEROSPIKE_ERR_UDF) {
+		while (strstr(err_code, ": ")) {
 			err_code++;
 		}
-		while(strstr(err_msg, ":LDT") != NULL) {
+		while (strstr(err_msg, ":LDT")) {
 			err_msg++;
 		}
 		final_code = (char *)malloc(err_msg - err_code + 2);
-		if(err_code != err->message && err_msg != err->message) {
+		if (err_code != err->message && err_msg != err->message) {
 			strncpy(final_code, err_code + 1, err_msg - err_code + 2);
 			err->code = atoi(final_code);
 			strcpy(err->message, err_msg);
 		}
 		free(final_code);
 	}
-	while(PyDict_Next(py_module_dict, &pos, &py_key, &py_value)) {
-		if(PyObject_HasAttrString(py_value, "code")) {
+	while (PyDict_Next(py_module_dict, &pos, &py_key, &py_value)) {
+		if (PyObject_HasAttrString(py_value, "code")) {
 			PyObject * py_code = PyObject_GetAttrString(py_value, "code");
-			if(py_code == Py_None) {
+			if (py_code == Py_None) {
 				continue;
 			}
-			if(err->code == PyInt_AsLong(py_code)) {
+			if (err->code == PyInt_AsLong(py_code)) {
 				PyObject *py_attr = NULL;
 				py_attr = PyString_FromString(err->message);
 				PyObject_SetAttrString(py_value, "msg", py_attr);

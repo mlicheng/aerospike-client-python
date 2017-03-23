@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,21 +75,23 @@ PyObject * Aerospike_Set_Log_Level(PyObject *parent, PyObject *args, PyObject * 
 	static char * kwlist[] = {"loglevel", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|:setLogLevel", kwlist, &py_log_level) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|:setLogLevel", kwlist, &py_log_level) == false) {
 		return NULL;
 	}
 
 	// Type check for incoming parameters
-	if ( !PyInt_Check(py_log_level) ){
+	if (!PyInt_Check(py_log_level)) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid log level" );
 		goto CLEANUP;
 	}
 
 	long lLogLevel = PyInt_AsLong(py_log_level);
-    if((uint32_t)-1 == lLogLevel) {
-        as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-        goto CLEANUP;
-    }
+	if (lLogLevel == (uint32_t)-1 && PyErr_Occurred()) {
+		if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+			as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+			goto CLEANUP;
+		}
+	}
 
 	// Invoke C API to set log level
 	as_log_set_level((as_log_level)lLogLevel);
@@ -97,7 +99,7 @@ PyObject * Aerospike_Set_Log_Level(PyObject *parent, PyObject *args, PyObject * 
 CLEANUP:
 
 	// Check error object and act accordingly
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
@@ -112,6 +114,12 @@ CLEANUP:
 static bool log_cb(as_log_level level, const char * func,
 		const char * file, uint32_t line, const char * fmt, ...){
 
+	char msg[1024];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(msg, 1024, fmt, ap);
+	va_end(ap);
+
 	// Extract pyhton user callback
 	PyObject *py_callback = user_callback.callback;
 	// User callback's argument list
@@ -122,19 +130,21 @@ static bool log_cb(as_log_level level, const char * func,
 	gstate = PyGILState_Ensure();
 
 	// Create a tuple of argument list
-	py_arglist = PyTuple_New(4);
+	py_arglist = PyTuple_New(5);
 
 	// Initialise argument variables
 	PyObject *log_level = PyInt_FromLong((long)level);
 	PyObject *func_name = PyString_FromString(func);
 	PyObject *file_name = PyString_FromString(file);
 	PyObject *line_no   = PyInt_FromLong((long)line);
+	PyObject *message   = PyString_FromString(msg);
 
 	// Set argument list
 	PyTuple_SetItem(py_arglist, 0, log_level);
 	PyTuple_SetItem(py_arglist, 1, func_name);
 	PyTuple_SetItem(py_arglist, 2, file_name);
 	PyTuple_SetItem(py_arglist, 3, line_no);
+	PyTuple_SetItem(py_arglist, 4, message);
 
 	// Invoke user callback, passing in argument's list
 	PyEval_CallObject(py_callback, py_arglist);
@@ -156,7 +166,7 @@ PyObject * Aerospike_Set_Log_Handler(PyObject *parent, PyObject *args, PyObject 
 	static char * kwlist[] = {"log_handler", NULL};
 
 	// Python function arguments parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|:setLogHandler", kwlist, &py_callback) == false){
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|:setLogHandler", kwlist, &py_callback) == false){
 		return NULL;
 	}
 

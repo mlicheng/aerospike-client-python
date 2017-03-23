@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 #include "client.h"
 #include "conversions.h"
 #include "exceptions.h"
-#include "key.h"
 #include "policy.h"
 
 /**
@@ -70,7 +69,7 @@ PyObject * AerospikeClient_Remove_Invoke(
 
 	// Convert python key object to as_key
 	pyobject_to_key(&err, py_key, &key);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 	// Key is initialised successfully
@@ -80,21 +79,21 @@ PyObject * AerospikeClient_Remove_Invoke(
 	if (py_policy) {
 		pyobject_to_policy_remove(&err, py_policy, &remove_policy, &remove_policy_p,
 				&self->as->config.policies.remove);
-		if ( err.code != AEROSPIKE_OK ) {
+		if (err.code != AEROSPIKE_OK) {
 			goto CLEANUP;
 		} else {
-			if ( py_meta && PyDict_Check(py_meta) ) {
+			if (py_meta && PyDict_Check(py_meta)) {
 				PyObject * py_gen = PyDict_GetItemString(py_meta, "gen");
 
-				if( py_gen != NULL ){
-					if ( PyInt_Check(py_gen) ) {
+				if (py_gen) {
+					if (PyInt_Check(py_gen)) {
 						remove_policy_p->generation = (uint16_t) PyInt_AsLong(py_gen);
-					} else if ( PyLong_Check(py_gen) ) {
+					} else if (PyLong_Check(py_gen)) {
 						remove_policy_p->generation = (uint16_t) PyLong_AsLongLong(py_gen);
-                        if((uint16_t)-1 == remove_policy_p->generation) {
-						    as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value for gen exceeds sys.maxsize");
-			                goto CLEANUP;
-                        }
+						if ((uint16_t)-1 == remove_policy_p->generation && PyErr_Occurred()) {
+							as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value for gen exceeds sys.maxsize");
+							goto CLEANUP;
+						}
 					} else {
 						as_error_update(&err, AEROSPIKE_ERR_PARAM, "Generation should be an int or long");
 					}
@@ -104,26 +103,28 @@ PyObject * AerospikeClient_Remove_Invoke(
 	}
 
 	// Invoke operation
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_key_remove(self->as, &err, remove_policy_p, &key);
-	if(err.code != AEROSPIKE_OK) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 	}
 
 CLEANUP:
 
-	if (key_initialised == true){
+	if (key_initialised == true) {
 		// Destroy the key if it is initialised successfully.
 		as_key_destroy(&key);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL;
 		error_to_pyobject(&err, &py_err);
 		PyObject *exception_type = raise_exception(&err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
 			PyObject_SetAttrString(exception_type, "key", py_key);
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
 			PyObject_SetAttrString(exception_type, "bin", Py_None);
 		}
 		PyErr_SetObject(exception_type, py_err);
@@ -158,8 +159,8 @@ PyObject * AerospikeClient_Remove(AerospikeClient * self, PyObject * args, PyObj
 	static char * kwlist[] = {"key", "meta", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|OO:remove", kwlist,
-			&py_key, &py_meta, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|OO:remove", kwlist,
+			&py_key, &py_meta, &py_policy) == false) {
 		return NULL;
 	}
 

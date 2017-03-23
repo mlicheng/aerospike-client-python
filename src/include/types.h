@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,25 @@
 // Bin names can be of type Unicode in Python
 // DB supports 32767 maximum number of bins
 #define MAX_UNICODE_OBJECTS 32767
+extern int counter;
+extern PyObject *py_global_hosts;
+extern bool user_shm_key;
+
+typedef struct {
+	PyObject_HEAD
+} AerospikeNullObject;
+
+typedef struct {
+	PyObject_HEAD
+	aerospike * as;
+	int shm_key;
+	int ref_cnt;
+} AerospikeGlobalHosts;
+
+typedef struct {
+	as_error error;
+	PyObject * callback;
+}user_serializer_callback;
 
 typedef struct {
 	PyObject *ob[MAX_UNICODE_OBJECTS];
@@ -40,45 +59,29 @@ typedef struct {
 	PyObject_HEAD
 	aerospike * as;
 	int is_conn_16;
+	user_serializer_callback user_serializer_call_info;
+	user_serializer_callback user_deserializer_call_info;
+	uint8_t is_client_put_serializer;
+	uint8_t strict_types;
 } AerospikeClient;
 
 typedef struct {
 	PyObject_HEAD
 	AerospikeClient * client;
-	PyObject * namespace;
-	PyObject * set;
-	PyObject * key;
-} AerospikeKey;
-
-typedef struct {
-	PyObject_HEAD
-	AerospikeClient * client;
 	as_query query;
-	as_static_pool static_pool;
 	UnicodePyObjects u_objs;
 } AerospikeQuery;
 
 typedef struct {
-  PyObject_HEAD
-  AerospikeClient * client;
-  as_scan scan;
+	PyObject_HEAD
+	AerospikeClient * client;
+	as_scan scan;
 } AerospikeScan;
 
 typedef struct {
-    PyObject_HEAD
-    AerospikeClient * client;
-    as_ldt lstack;
-    as_key key;
-    char bin_name[AS_BIN_NAME_MAX_LEN];
-} AerospikeLStack;
-
-typedef struct {
-    PyObject_HEAD
-    AerospikeClient * client;
-    as_ldt lset;
-    as_key key;
-    char bin_name[AS_BIN_NAME_MAX_LEN];
-} AerospikeLSet;
+	PyObject_HEAD
+	PyObject *geo_data;
+} AerospikeGeospatial;
 
 typedef struct {
     PyObject_HEAD
@@ -87,11 +90,3 @@ typedef struct {
     as_key key;
     char bin_name[AS_BIN_NAME_MAX_LEN];
 } AerospikeLList;
-
-typedef struct {
-    PyObject_HEAD
-    AerospikeClient * client;
-    as_ldt lmap;
-    as_key key;
-    char bin_name[AS_BIN_NAME_MAX_LEN];
-} AerospikeLMap;

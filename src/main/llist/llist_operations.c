@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2013-2015 Aerospike, Inc.
+ * Copyright 2013-2016 Aerospike, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,8 +57,8 @@ PyObject * AerospikeLList_Add(AerospikeLList * self, PyObject * args, PyObject *
 	static char * kwlist[] = {"element", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|O:add", kwlist, 
-				&py_value, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|O:add", kwlist,
+				&py_value, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -75,7 +75,7 @@ PyObject * AerospikeLList_Add(AerospikeLList * self, PyObject * args, PyObject *
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -84,9 +84,12 @@ PyObject * AerospikeLList_Add(AerospikeLList * self, PyObject * args, PyObject *
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_add(self->client->as, &err, apply_policy_p, &self->key,
 			&self->llist, val);
-	if(err.code != AEROSPIKE_OK) {
+	Py_END_ALLOW_THREADS
+
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 	}
 
@@ -96,16 +99,16 @@ CLEANUP:
 		as_val_destroy(val);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL, *py_key = NULL;
 		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
 			key_to_pyobject(&err, &self->key, &py_key);
 			PyObject_SetAttrString(exception_type, "key", py_key);
 			Py_DECREF(py_key);
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
 			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
 			PyObject_SetAttrString(exception_type, "bin", py_bins);
 			Py_DECREF(py_bins);
@@ -147,8 +150,8 @@ PyObject * AerospikeLList_Add_Many(AerospikeLList * self, PyObject * args, PyObj
 	static char * kwlist[] = {"elements", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|O:add_many", kwlist, 
-				&py_arglist, &py_policy)== false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|O:add_many", kwlist,
+				&py_arglist, &py_policy)== false) {
 		return NULL;
 	}
 
@@ -165,14 +168,14 @@ PyObject * AerospikeLList_Add_Many(AerospikeLList * self, PyObject * args, PyObj
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	/*
 	 * Convert python list to as list 
 	 */
-	if ( !PyList_Check(py_arglist)) {
+	if (!PyList_Check(py_arglist)) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid argument(type)");
 		goto CLEANUP;
 	}
@@ -182,9 +185,11 @@ PyObject * AerospikeLList_Add_Many(AerospikeLList * self, PyObject * args, PyObj
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_add_all(self->client->as, &err, apply_policy_p,
 			&self->key, &self->llist, arglist);
-	if(err.code != AEROSPIKE_OK) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 	}
 
@@ -194,16 +199,16 @@ CLEANUP:
 		as_list_destroy(arglist);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL, *py_key = NULL;
 		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
 			key_to_pyobject(&err, &self->key, &py_key);
 			PyObject_SetAttrString(exception_type, "key", py_key);
 			Py_DECREF(py_key);
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
 			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
 			PyObject_SetAttrString(exception_type, "bin", py_bins);
 			Py_DECREF(py_bins);
@@ -247,8 +252,8 @@ PyObject * AerospikeLList_Get(AerospikeLList * self, PyObject * args, PyObject *
 	static char * kwlist[] = {"value", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|O:get", kwlist, 
-				&py_value, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|O:get", kwlist,
+				&py_value, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -265,7 +270,7 @@ PyObject * AerospikeLList_Get(AerospikeLList * self, PyObject * args, PyObject *
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -274,8 +279,10 @@ PyObject * AerospikeLList_Get(AerospikeLList * self, PyObject * args, PyObject *
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_find(self->client->as, &err, apply_policy_p, &self->key,
 			&self->llist, val, &list_p);
+	Py_END_ALLOW_THREADS
 
 	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
@@ -283,7 +290,7 @@ PyObject * AerospikeLList_Get(AerospikeLList * self, PyObject * args, PyObject *
 	}
 
 	PyObject * py_list = NULL;
-	list_to_pyobject(&err, list_p, &py_list);
+	list_to_pyobject(self->client, &err, list_p, &py_list);
 
 CLEANUP:
 
@@ -295,16 +302,16 @@ CLEANUP:
 		as_list_destroy(list_p);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL, *py_key = NULL;
 		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
 			key_to_pyobject(&err, &self->key, &py_key);
 			PyObject_SetAttrString(exception_type, "key", py_key);
 			Py_DECREF(py_key);
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
 			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
 			PyObject_SetAttrString(exception_type, "bin", py_bins);
 			Py_DECREF(py_bins);
@@ -348,8 +355,8 @@ PyObject * AerospikeLList_Filter(AerospikeLList * self, PyObject * args, PyObjec
 	static char * kwlist[] = {"function", "args", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "|sOO:filter", kwlist, 
-				&filter_name, &py_args, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "|sOO:filter", kwlist,
+				&filter_name, &py_args, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -366,16 +373,16 @@ PyObject * AerospikeLList_Filter(AerospikeLList * self, PyObject * args, PyObjec
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	if ( py_args && !filter_name) {
+	if (py_args && !filter_name) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Filter arguments without filter name");
 		goto CLEANUP;
 	}
 
-	if ( py_args && !PyList_Check(py_args)) {
+	if (py_args && !PyList_Check(py_args)) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid filter argument(type)");
 		goto CLEANUP;
 	}
@@ -384,8 +391,10 @@ PyObject * AerospikeLList_Filter(AerospikeLList * self, PyObject * args, PyObjec
 		pyobject_to_list(self->client, &err, py_args, &arg_list, &static_pool, SERIALIZER_PYTHON);
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_filter(self->client->as, &err, apply_policy_p, &self->key,
 			&self->llist, filter_name, arg_list, &elements_list);
+	Py_END_ALLOW_THREADS
 
 	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
@@ -393,7 +402,7 @@ PyObject * AerospikeLList_Filter(AerospikeLList * self, PyObject * args, PyObjec
 	}
 
 	PyObject* py_list = NULL;
-	list_to_pyobject(&err, elements_list, &py_list);
+	list_to_pyobject(self->client, &err, elements_list, &py_list);
 
 CLEANUP:
 
@@ -405,16 +414,16 @@ CLEANUP:
 		as_list_destroy(arg_list);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL, *py_key = NULL;
 		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
 			key_to_pyobject(&err, &self->key, &py_key);
 			PyObject_SetAttrString(exception_type, "key", py_key);
 			Py_DECREF(py_key);
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
 			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
 			PyObject_SetAttrString(exception_type, "bin", py_bins);
 			Py_DECREF(py_bins);
@@ -451,8 +460,8 @@ PyObject * AerospikeLList_Destroy(AerospikeLList * self, PyObject * args, PyObje
 	static char * kwlist[] = {"policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "|O:destroy", kwlist, 
-				&py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "|O:destroy", kwlist,
+				&py_policy) == false) {
 		return NULL;
 	}
 
@@ -469,26 +478,28 @@ PyObject * AerospikeLList_Destroy(AerospikeLList * self, PyObject * args, PyObje
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_destroy(self->client->as, &err, apply_policy_p, &self->key,
 			&self->llist);
+	Py_END_ALLOW_THREADS
 
 CLEANUP:
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL, *py_key = NULL;
 		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
 			key_to_pyobject(&err, &self->key, &py_key);
 			PyObject_SetAttrString(exception_type, "key", py_key);
 			Py_DECREF(py_key);
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
 			PyObject * py_bins = PyString_FromString((char *)&self->bin_name);
 			PyObject_SetAttrString(exception_type, "bin", py_bins);
 			Py_DECREF(py_bins);
@@ -531,8 +542,8 @@ PyObject * AerospikeLList_Remove(AerospikeLList * self, PyObject * args, PyObjec
 	static char * kwlist[] = {"value", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|O:remove", kwlist, 
-				&py_value, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|O:remove", kwlist,
+				&py_value, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -549,7 +560,7 @@ PyObject * AerospikeLList_Remove(AerospikeLList * self, PyObject * args, PyObjec
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
@@ -559,8 +570,10 @@ PyObject * AerospikeLList_Remove(AerospikeLList * self, PyObject * args, PyObjec
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_remove(self->client->as, &err, apply_policy_p, &self->key,
 			&self->llist, val);
+	Py_END_ALLOW_THREADS
 
 CLEANUP:
 
@@ -568,16 +581,16 @@ CLEANUP:
 		as_val_destroy(val);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL, *py_key = NULL;
 		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
 			key_to_pyobject(&err, &self->key, &py_key);
 			PyObject_SetAttrString(exception_type, "key", py_key);
 			Py_DECREF(py_key);
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
 			PyObject * py_bins = PyString_FromString((char *)&self->bin_name);
 			PyObject_SetAttrString(exception_type, "bin", py_bins);
 			Py_DECREF(py_bins);
@@ -615,8 +628,8 @@ PyObject * AerospikeLList_Size(AerospikeLList * self, PyObject * args, PyObject 
 	static char * kwlist[] = {"policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "|O:size", kwlist, 
-				&py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "|O:size", kwlist,
+				&py_policy) == false) {
 		return NULL;
 	}
 
@@ -633,26 +646,28 @@ PyObject * AerospikeLList_Size(AerospikeLList * self, PyObject * args, PyObject 
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		as_error_update(&err, err.code, NULL);
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_size(self->client->as, &err, apply_policy_p, &self->key,
 			&self->llist, (uint32_t *)&size);
+	Py_END_ALLOW_THREADS
 
 CLEANUP:
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		PyObject * py_err = NULL, *py_key = NULL;
 		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		if(PyObject_HasAttrString(exception_type, "key")) {
+		if (PyObject_HasAttrString(exception_type, "key")) {
 			key_to_pyobject(&err, &self->key, &py_key);
 			PyObject_SetAttrString(exception_type, "key", py_key);
 			Py_DECREF(py_key);
 		} 
-		if(PyObject_HasAttrString(exception_type, "bin")) {
+		if (PyObject_HasAttrString(exception_type, "bin")) {
 			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
 			PyObject_SetAttrString(exception_type, "bin", py_bins);
 			Py_DECREF(py_bins);
@@ -694,8 +709,8 @@ PyObject * AerospikeLList_Find_First(AerospikeLList * self, PyObject * args, PyO
 	static char * kwlist[] = {"count", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|O:find_first", kwlist, 
-				&py_count, &py_policy)== false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|O:find_first", kwlist,
+				&py_count, &py_policy)== false) {
 		return NULL;
 	}
 
@@ -712,36 +727,49 @@ PyObject * AerospikeLList_Find_First(AerospikeLList * self, PyObject * args, PyO
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	uint32_t count = 0;
-	if ( PyInt_Check(py_count)) {
+	if (PyInt_Check(py_count)) {
 		count = PyInt_AsLong(py_count);
-	} else if( PyLong_Check(py_count) ) {
+	} else if (PyLong_Check(py_count)) {
 		count = PyLong_AsLong(py_count);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Count should be an integer or long");
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_find_first(self->client->as, &err, apply_policy_p, &self->key, &self->llist, count, &elements_list);
-	if(err.code != AEROSPIKE_OK) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	list_to_pyobject(&err, elements_list, &py_elements_list);
+	list_to_pyobject(self->client, &err, elements_list, &py_elements_list);
 
 CLEANUP:
 	if (elements_list) {
 		as_list_destroy(elements_list);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL, *py_key = NULL;
+		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		PyErr_SetObject(PyExc_Exception, py_err);
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			key_to_pyobject(&err, &self->key, &py_key);
+			PyObject_SetAttrString(exception_type, "key", py_key);
+			Py_DECREF(py_key);
+		} 
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
+			PyObject_SetAttrString(exception_type, "bin", py_bins);
+			Py_DECREF(py_bins);
+		}
+		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
 		return NULL;
 	}
@@ -783,8 +811,8 @@ PyObject * AerospikeLList_Find_First_Filter(AerospikeLList * self, PyObject * ar
 	static char * kwlist[] = {"count", "function", "args", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OsO|O:find_first_filter", kwlist, 
-				&py_count, &filter_name, &py_args, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OsO|O:find_first_filter", kwlist,
+				&py_count, &filter_name, &py_args, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -801,16 +829,16 @@ PyObject * AerospikeLList_Find_First_Filter(AerospikeLList * self, PyObject * ar
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	if ( py_args && !filter_name) {
+	if (py_args && !filter_name) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Filter arguments without filter name");
 		goto CLEANUP;
 	}
 
-	if ( py_args && !PyList_Check(py_args) && (py_args != Py_None)) {
+	if (py_args && !PyList_Check(py_args) && (py_args != Py_None)) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid filter argument(type)");
 		goto CLEANUP;
 	}
@@ -820,28 +848,32 @@ PyObject * AerospikeLList_Find_First_Filter(AerospikeLList * self, PyObject * ar
 	}
 
 	uint32_t count = 0;
-	if ( PyInt_Check(py_count)) {
+	if (PyInt_Check(py_count)) {
 		count = PyInt_AsLong(py_count);
-	} else if( PyLong_Check(py_count) ) {
+	} else if (PyLong_Check(py_count)) {
 		count = PyLong_AsLong(py_count);
-        if((uint32_t)-1 == count) {
-            as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-            goto CLEANUP;
-        }
+		if (count == (uint32_t)-1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+				goto CLEANUP;
+			}
+		}
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Count should be an integer or long");
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_find_first_filter(self->client->as, &err, apply_policy_p, &self->key,
 			&self->llist, count, filter_name, arg_list, &elements_list);
+	Py_END_ALLOW_THREADS
 
 	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	PyObject* py_list = NULL;
-	list_to_pyobject(&err, elements_list, &py_list);
+	list_to_pyobject(self->client, &err, elements_list, &py_list);
 
 CLEANUP:
 
@@ -853,10 +885,21 @@ CLEANUP:
 		as_list_destroy(arg_list);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL, *py_key = NULL;
+		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		PyErr_SetObject(PyExc_Exception, py_err);
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			key_to_pyobject(&err, &self->key, &py_key);
+			PyObject_SetAttrString(exception_type, "key", py_key);
+			Py_DECREF(py_key);
+		} 
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
+			PyObject_SetAttrString(exception_type, "bin", py_bins);
+			Py_DECREF(py_bins);
+		}
+		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
 		return NULL;
 	}
@@ -893,8 +936,8 @@ PyObject * AerospikeLList_Find_Last(AerospikeLList * self, PyObject * args, PyOb
 	static char * kwlist[] = {"count", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "O|O:find_last", kwlist, 
-				&py_count, &py_policy)== false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O|O:find_last", kwlist,
+				&py_count, &py_policy)== false) {
 		return NULL;
 	}
 
@@ -911,40 +954,55 @@ PyObject * AerospikeLList_Find_Last(AerospikeLList * self, PyObject * args, PyOb
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	uint32_t count = 0;
-	if ( PyInt_Check(py_count)) {
+	if (PyInt_Check(py_count)) {
 		count = PyInt_AsLong(py_count);
-	} else if( PyLong_Check(py_count) ) {
+	} else if (PyLong_Check(py_count)) {
 		count = PyLong_AsLong(py_count);
-        if((uint32_t)-1 == count) {
-            as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-            goto CLEANUP;
-        }
+		if (count == (uint32_t)-1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+				goto CLEANUP;
+			}
+		}
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Count should be an integer or long");
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_find_last(self->client->as, &err, apply_policy_p, &self->key, &self->llist, count, &elements_list);
-	if(err.code != AEROSPIKE_OK) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	list_to_pyobject(&err, elements_list, &py_elements_list);
+	list_to_pyobject(self->client, &err, elements_list, &py_elements_list);
 
 CLEANUP:
 	if (elements_list) {
 		as_list_destroy(elements_list);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL, *py_key = NULL;
+		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		PyErr_SetObject(PyExc_Exception, py_err);
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			key_to_pyobject(&err, &self->key, &py_key);
+			PyObject_SetAttrString(exception_type, "key", py_key);
+			Py_DECREF(py_key);
+		} 
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
+			PyObject_SetAttrString(exception_type, "bin", py_bins);
+			Py_DECREF(py_bins);
+		}
+		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
 		return NULL;
 	}
@@ -985,8 +1043,8 @@ PyObject * AerospikeLList_Find_Last_Filter(AerospikeLList * self, PyObject * arg
 	static char * kwlist[] = {"count", "function", "args", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OsO|O:find_last_filter", kwlist, 
-				&py_count, &filter_name, &py_args, &py_policy) == false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OsO|O:find_last_filter", kwlist,
+				&py_count, &filter_name, &py_args, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -1003,16 +1061,16 @@ PyObject * AerospikeLList_Find_Last_Filter(AerospikeLList * self, PyObject * arg
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	if ( py_args && !filter_name) {
+	if (py_args && !filter_name) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Filter arguments without filter name");
 		goto CLEANUP;
 	}
 
-	if ( py_args && !PyList_Check(py_args) && (py_args != Py_None)) {
+	if (py_args && !PyList_Check(py_args) && (py_args != Py_None)) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid filter argument(type)");
 		goto CLEANUP;
 	}
@@ -1022,28 +1080,32 @@ PyObject * AerospikeLList_Find_Last_Filter(AerospikeLList * self, PyObject * arg
 	}
 
 	uint32_t count = 0;
-	if ( PyInt_Check(py_count)) {
+	if (PyInt_Check(py_count)) {
 		count = PyInt_AsLong(py_count);
-	} else if( PyLong_Check(py_count) ) {
+	} else if (PyLong_Check(py_count)) {
 		count = PyLong_AsLong(py_count);
-        if((uint32_t)-1 == count) {
-            as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-            goto CLEANUP;
-        }
+		if (count == (uint32_t)-1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+				goto CLEANUP;
+			}
+		}
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Count should be an integer or long");
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_find_last_filter(self->client->as, &err, apply_policy_p, &self->key,
 			&self->llist, count, filter_name, arg_list, &elements_list);
+	Py_END_ALLOW_THREADS
 
 	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	PyObject* py_list = NULL;
-	list_to_pyobject(&err, elements_list, &py_list);
+	list_to_pyobject(self->client, &err, elements_list, &py_list);
 
 CLEANUP:
 
@@ -1055,10 +1117,21 @@ CLEANUP:
 		as_list_destroy(arg_list);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL, *py_key = NULL;
+		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		PyErr_SetObject(PyExc_Exception, py_err);
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			key_to_pyobject(&err, &self->key, &py_key);
+			PyObject_SetAttrString(exception_type, "key", py_key);
+			Py_DECREF(py_key);
+		} 
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
+			PyObject_SetAttrString(exception_type, "bin", py_bins);
+			Py_DECREF(py_bins);
+		}
+		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
 		return NULL;
 	}
@@ -1097,8 +1170,8 @@ PyObject * AerospikeLList_Find_From(AerospikeLList * self, PyObject * args, PyOb
 	static char * kwlist[] = {"value", "count", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OO|O:find_from", kwlist, 
-				&py_value, &py_count, &py_policy)== false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OO|O:find_from", kwlist,
+				&py_value, &py_count, &py_policy)== false) {
 		return NULL;
 	}
 
@@ -1115,19 +1188,21 @@ PyObject * AerospikeLList_Find_From(AerospikeLList * self, PyObject * args, PyOb
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	uint32_t count = 0;
-	if ( PyInt_Check(py_count) ) {
+	if (PyInt_Check(py_count)) {
 		count = PyInt_AsLong(py_count);
-	} else if( PyLong_Check(py_count) ) {
+	} else if (PyLong_Check(py_count)) {
 		count = PyLong_AsLong(py_count);
-        if((uint32_t)-1 == count) {
-            as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-            goto CLEANUP;
-        }
+		if (count == (uint32_t)-1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+				goto CLEANUP;
+			}
+		}
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Count should be an integer or long");
 		goto CLEANUP;
@@ -1135,26 +1210,39 @@ PyObject * AerospikeLList_Find_From(AerospikeLList * self, PyObject * args, PyOb
 
 	pyobject_to_val(self->client, &err, py_value, &from_val, &static_pool, SERIALIZER_PYTHON);
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_find_from(self->client->as, &err, apply_policy_p, &self->key, &self->llist, from_val, count, &elements_list);
-	if(err.code != AEROSPIKE_OK) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	list_to_pyobject(&err, elements_list, &py_elements_list);
+	list_to_pyobject(self->client, &err, elements_list, &py_elements_list);
 
 CLEANUP:
 	if (elements_list) {
 		as_list_destroy(elements_list);
 	}
 
-	if(from_val) {
+	if (from_val) {
 		as_val_destroy(from_val);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL, *py_key = NULL;
+		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		PyErr_SetObject(PyExc_Exception, py_err);
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			key_to_pyobject(&err, &self->key, &py_key);
+			PyObject_SetAttrString(exception_type, "key", py_key);
+			Py_DECREF(py_key);
+		} 
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
+			PyObject_SetAttrString(exception_type, "bin", py_bins);
+			Py_DECREF(py_bins);
+		}
+		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
 		return NULL;
 	}
@@ -1197,8 +1285,8 @@ PyObject * AerospikeLList_Find_From_Filter(AerospikeLList * self, PyObject * arg
 	static char * kwlist[] = {"value", "count", "function", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OOsO|O:find_from_filter", kwlist, 
-				&py_value, &py_count, &filter_name, &py_args, &py_policy)== false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOsO|O:find_from_filter", kwlist,
+				&py_value, &py_count, &filter_name, &py_args, &py_policy)== false) {
 		return NULL;
 	}
 
@@ -1215,30 +1303,32 @@ PyObject * AerospikeLList_Find_From_Filter(AerospikeLList * self, PyObject * arg
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	uint32_t count = 0;
-	if ( PyInt_Check(py_count) ) {
+	if (PyInt_Check(py_count)) {
 		count = PyInt_AsLong(py_count);
-	} else if( PyLong_Check(py_count) ) {
+	} else if (PyLong_Check(py_count)) {
 		count = PyLong_AsLong(py_count);
-        if((uint32_t)-1 == count) {
-            as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-            goto CLEANUP;
-        }
+		if (count == (uint32_t)-1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+				goto CLEANUP;
+			}
+		}
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Count should be an integer or long");
 		goto CLEANUP;
 	}
 
-	if ( py_args && !filter_name) {
+	if (py_args && !filter_name) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Filter arguments without filter name");
 		goto CLEANUP;
 	}
 
-	if ( py_args && !PyList_Check(py_args) && (py_args != Py_None)) {
+	if (py_args && !PyList_Check(py_args) && (py_args != Py_None)) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid filter argument(type)");
 		goto CLEANUP;
 	}
@@ -1247,33 +1337,46 @@ PyObject * AerospikeLList_Find_From_Filter(AerospikeLList * self, PyObject * arg
 		pyobject_to_list(self->client, &err, py_args, &arg_list, &static_pool, SERIALIZER_PYTHON);
 	}
 
-	if(py_value != Py_None) {
+	if (py_value != Py_None) {
 		pyobject_to_val(self->client, &err, py_value, &from_val, &static_pool, SERIALIZER_PYTHON);
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Value should not be None");
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_find_from_filter(self->client->as, &err, apply_policy_p, &self->key, &self->llist, from_val, count, filter_name, arg_list, &elements_list);
-	if(err.code != AEROSPIKE_OK) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	list_to_pyobject(&err, elements_list, &py_elements_list);
+	list_to_pyobject(self->client, &err, elements_list, &py_elements_list);
 
 CLEANUP:
 	if (elements_list) {
 		as_list_destroy(elements_list);
 	}
 
-	if(from_val) {
+	if (from_val) {
 		as_val_destroy(from_val);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL, *py_key = NULL;
+		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		PyErr_SetObject(PyExc_Exception, py_err);
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			key_to_pyobject(&err, &self->key, &py_key);
+			PyObject_SetAttrString(exception_type, "key", py_key);
+			Py_DECREF(py_key);
+		} 
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
+			PyObject_SetAttrString(exception_type, "bin", py_bins);
+			Py_DECREF(py_bins);
+		}
+		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
 		return NULL;
 	}
@@ -1319,8 +1422,8 @@ PyObject * AerospikeLList_Range_Limit(AerospikeLList * self, PyObject * args, Py
 	static char * kwlist[] = {"start_value", "end_value", "count", "function", "args", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "OOO|OOO:range_limit", kwlist, 
-				&py_from_value, &py_end_value, &py_count, &py_filter_name, &py_args, &py_policy)== false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "OOO|OOO:range_limit", kwlist,
+				&py_from_value, &py_end_value, &py_count, &py_filter_name, &py_args, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -1337,38 +1440,40 @@ PyObject * AerospikeLList_Range_Limit(AerospikeLList * self, PyObject * args, Py
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
 	uint32_t count = 0;
-	if ( PyInt_Check(py_count) ) {
+	if (PyInt_Check(py_count)) {
 		count = PyInt_AsLong(py_count);
-	} else if( PyLong_Check(py_count) ) {
+	} else if (PyLong_Check(py_count)) {
 		count = PyLong_AsLong(py_count);
-        if((uint32_t)-1 == count) {
-            as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
-            goto CLEANUP;
-        }
+		if (count == (uint32_t)-1 && PyErr_Occurred()) {
+			if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
+				as_error_update(&err, AEROSPIKE_ERR_PARAM, "integer value exceeds sys.maxsize");
+				goto CLEANUP;
+			}
+		}
 	} else {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Count should be an integer or long");
 		goto CLEANUP;
 	}
 
-	if(py_filter_name) {
-		if(PyString_Check(py_filter_name)) {
+	if (py_filter_name) {
+		if (PyString_Check(py_filter_name)) {
 			filter_name = PyString_AsString(py_filter_name);
-		} else if(py_filter_name != Py_None) {
+		} else if (py_filter_name != Py_None) {
 			as_error_update(&err, AEROSPIKE_ERR_PARAM, "Filter name should be string or None");
 			goto CLEANUP;
 		}
 	}
-	if ( py_args && !py_filter_name) {
+	if (py_args && !py_filter_name) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Filter arguments without filter name");
 		goto CLEANUP;
 	}
 
-	if ( !PyList_Check(py_args) && (py_args != Py_None)) {
+	if (!PyList_Check(py_args) && (py_args != Py_None)) {
 		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid filter argument(type)");
 		goto CLEANUP;
 	}
@@ -1377,7 +1482,7 @@ PyObject * AerospikeLList_Range_Limit(AerospikeLList * self, PyObject * args, Py
 		pyobject_to_list(self->client, &err, py_args, &arg_list, &static_pool, SERIALIZER_PYTHON);
 	}
 
-	if( py_from_value != Py_None && py_end_value != Py_None ) {
+	if (py_from_value != Py_None && py_end_value != Py_None) {
 		pyobject_to_val(self->client, &err, py_from_value, &from_val, &static_pool, SERIALIZER_PYTHON);
 		pyobject_to_val(self->client, &err, py_end_value, &end_val, &static_pool, SERIALIZER_PYTHON);
 	} else {
@@ -1385,29 +1490,42 @@ PyObject * AerospikeLList_Range_Limit(AerospikeLList * self, PyObject * args, Py
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_range_limit(self->client->as, &err, apply_policy_p, &self->key, &self->llist, from_val, end_val, count, filter_name, arg_list, &elements_list);
-	if(err.code != AEROSPIKE_OK) {
+	Py_END_ALLOW_THREADS
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
-	list_to_pyobject(&err, elements_list, &py_elements_list);
+	list_to_pyobject(self->client, &err, elements_list, &py_elements_list);
 
 CLEANUP:
 	if (elements_list) {
 		as_list_destroy(elements_list);
 	}
 
-	if(from_val) {
+	if (from_val) {
 		as_val_destroy(from_val);
 	}
-	if(end_val) {
+	if (end_val) {
 		as_val_destroy(end_val);
 	}
 
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL, *py_key = NULL;
+		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		PyErr_SetObject(PyExc_Exception, py_err);
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			key_to_pyobject(&err, &self->key, &py_key);
+			PyObject_SetAttrString(exception_type, "key", py_key);
+			Py_DECREF(py_key);
+		} 
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
+			PyObject_SetAttrString(exception_type, "bin", py_bins);
+			Py_DECREF(py_bins);
+		}
+		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
 		return NULL;
 	}
@@ -1440,8 +1558,8 @@ PyObject * AerospikeLList_Set_Page_Size(AerospikeLList * self, PyObject * args, 
 	static char * kwlist[] = {"size", "policy", NULL};
 
 	// Python Function Argument Parsing
-	if ( PyArg_ParseTupleAndKeywords(args, kwds, "i|O:set_page_size", kwlist,
-				&page_size, &py_policy)== false ) {
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "i|O:set_page_size", kwlist,
+				&page_size, &py_policy) == false) {
 		return NULL;
 	}
 
@@ -1458,17 +1576,30 @@ PyObject * AerospikeLList_Set_Page_Size(AerospikeLList * self, PyObject * args, 
 	// Convert python policy object to as_policy_apply
 	pyobject_to_policy_apply(&err, py_policy, &apply_policy, &apply_policy_p,
 			&self->client->as->config.policies.apply);
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		goto CLEANUP;
 	}
 
+	Py_BEGIN_ALLOW_THREADS
 	aerospike_llist_set_page_size(self->client->as, &err, apply_policy_p, &self->key, &self->llist, page_size);
+	Py_END_ALLOW_THREADS
 CLEANUP:
 
-	if ( err.code != AEROSPIKE_OK ) {
-		PyObject * py_err = NULL;
+	if (err.code != AEROSPIKE_OK) {
+		PyObject * py_err = NULL, *py_key = NULL;
+		PyObject *exception_type = raise_exception(&err);
 		error_to_pyobject(&err, &py_err);
-		PyErr_SetObject(PyExc_Exception, py_err);
+		if (PyObject_HasAttrString(exception_type, "key")) {
+			key_to_pyobject(&err, &self->key, &py_key);
+			PyObject_SetAttrString(exception_type, "key", py_key);
+			Py_DECREF(py_key);
+		} 
+		if (PyObject_HasAttrString(exception_type, "bin")) {
+			PyObject *py_bins = PyString_FromString((char *)&self->bin_name);
+			PyObject_SetAttrString(exception_type, "bin", py_bins);
+			Py_DECREF(py_bins);
+		}
+		PyErr_SetObject(exception_type, py_err);
 		Py_DECREF(py_err);
 		return NULL;
 	}
